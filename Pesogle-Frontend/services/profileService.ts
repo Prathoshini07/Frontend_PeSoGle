@@ -1,4 +1,4 @@
-import type { ApiResponse } from './api';
+import apiClient, { type ApiResponse } from './api';
 import type { User } from '@/mocks/users';
 import { currentUser } from '@/mocks/users';
 
@@ -16,19 +16,19 @@ export interface ProfileCreateRequest {
 export const profileService = {
   getProfile: async (): Promise<ApiResponse<User>> => {
     console.log('[ProfileService] Fetching profile');
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { data: currentUser, success: true };
+    const response = await apiClient.get('/profile/me');
+    return response.data;
   },
 
   createProfile: async (data: ProfileCreateRequest): Promise<ApiResponse<User>> => {
     console.log('[ProfileService] Creating profile:', data.name);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return { data: { ...currentUser, ...data }, success: true };
+    const response = await apiClient.post('/profile/', data);
+    return response.data;
   },
 
   updateProfile: async (data: Partial<ProfileCreateRequest>): Promise<ApiResponse<User>> => {
     console.log('[ProfileService] Updating profile');
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return { data: { ...currentUser, ...data }, success: true };
+    const response = await apiClient.put('/profile/me', data);
+    return response.data;
   },
 };

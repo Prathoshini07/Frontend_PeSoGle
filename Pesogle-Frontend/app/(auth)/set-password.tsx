@@ -22,7 +22,7 @@ export default function SetPasswordScreen() {
     mutationFn: () => authService.setPassword({ email: email || '', password, confirmPassword }),
     onSuccess: () => {
       console.log('[SetPassword] Success, logging in');
-      login(email || '', 'mock-token-' + Date.now());
+      login(email || '', 'mock-token-' + Date.now(), false);
       router.replace('/profile-creation' as any);
     },
     onError: () => {

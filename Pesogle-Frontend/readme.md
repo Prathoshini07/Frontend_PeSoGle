@@ -22,7 +22,12 @@ git clone <YOUR_GIT_URL>
 cd Pesogle-Frontend
 ```
 
-2. Install dependencies:
+3. Create a `.env` file in the root directory:
+```bash
+echo "EXPO_PUBLIC_API_URL=http://localhost:8080" > .env
+```
+
+4. Install dependencies:
 
 ```bash
 bun i

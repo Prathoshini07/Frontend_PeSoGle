@@ -1,78 +1,110 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { Mail } from 'lucide-react-native';
+import { LogIn, Lock, Mail } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, spacing } from '@/constants/theme';
 import InputField from '@/components/InputField';
 import PrimaryButton from '@/components/PrimaryButton';
 import { authService } from '@/services/authService';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const sendOtpMutation = useMutation({
-    mutationFn: () => authService.sendOtp({ email }),
-    onSuccess: () => {
-      console.log('[Login] OTP sent successfully');
-      router.push({ pathname: '/(auth)/otp-verification' as any, params: { email } });
+  const loginMutation = useMutation({
+    mutationFn: () => authService.login({ email, password }),
+    onSuccess: (response) => {
+      console.log('[Login] Success');
+      login(email, response.data.token, response.data.user.profileComplete);
+
+      // Navigate based on profile status
+      if (response.data.user.profileComplete) {
+        router.replace('/(tabs)/home');
+      } else {
+        router.replace('/profile-creation');
+      }
     },
-    onError: (err) => {
-      console.log('[Login] OTP send error:', err);
-      setError('Failed to send OTP. Please try again.');
+    onError: (err: any) => {
+      console.log('[Login] Error:', err);
+      setError(err?.response?.data?.detail || 'Invalid email or password');
     },
   });
 
-  const handleSendOtp = useCallback(() => {
+  const handleLogin = useCallback(() => {
     setError('');
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email.trim()) {
-      setError('Please enter your email address');
+    if (!email.trim() || !password.trim()) {
+      setError('Please fill in all fields');
       return;
     }
-    if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    sendOtpMutation.mutate();
-  }, [email, sendOtpMutation]);
+    loginMutation.mutate();
+  }, [email, password, loginMutation]);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <Mail size={28} color={Colors.primaryDark} />
+            <LogIn size={28} color={Colors.primaryDark} />
           </View>
-          <Text style={styles.title}>Welcome to PeSoGle</Text>
-          <Text style={styles.subtitle}>Enter your academic email to get started</Text>
+          <Text style={styles.title}>PeSoGle Login</Text>
+          <Text style={styles.subtitle}>Enter your credentials to access your account</Text>
         </View>
         <View style={styles.form}>
           <InputField
-            label="Academic Email"
+            label="Email"
             placeholder="your.name@university.edu"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            error={error}
+            error={error && !password ? error : ''}
             testID="email-input"
           />
-          <PrimaryButton
-            title="Send OTP"
-            onPress={handleSendOtp}
-            loading={sendOtpMutation.isPending}
-            disabled={!email.trim()}
-            testID="send-otp-btn"
+          <InputField
+            label="Password"
+            placeholder="••••••••"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={true}
+            autoCapitalize="none"
+            error={error && password ? error : ''}
+            testID="password-input"
           />
+
+          <TouchableOpacity style={styles.forgotPassword}>
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          </TouchableOpacity>
+
+          <PrimaryButton
+            title="Login"
+            onPress={handleLogin}
+            loading={loginMutation.isPending}
+            disabled={!email.trim() || !password.trim()}
+            testID="login-btn"
+          />
+
+          <View style={styles.divider}>
+            <View style={styles.line} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.line} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.signupLink}
+            onPress={() => router.replace('/(auth)/signup')}
+          >
+            <Text style={styles.signupLinkText}>
+              Don't have an account? <Text style={styles.signupLinkBold}>Sign Up</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.footerText}>
-          By continuing, you agree to our Terms of Service and Privacy Policy
-        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -86,7 +118,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.xxxxl + spacing.xxxl,
+    paddingTop: spacing.xxxxl,
     paddingBottom: spacing.xxxl,
   },
   header: {
@@ -116,11 +148,41 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
   },
-  footerText: {
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: spacing.xl,
+  },
+  forgotPasswordText: {
+    fontSize: fontSize.sm,
+    color: Colors.accent,
+    fontWeight: fontWeight.semibold,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.xl,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  dividerText: {
+    marginHorizontal: spacing.md,
     fontSize: fontSize.xs,
     color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.xxl,
-    lineHeight: 18,
+    fontWeight: fontWeight.medium,
+  },
+  signupLink: {
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  signupLinkText: {
+    fontSize: fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  signupLinkBold: {
+    color: Colors.accent, // Changed from primary to accent as primary might not exist
+    fontWeight: fontWeight.bold,
   },
 });
