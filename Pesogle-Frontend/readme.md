@@ -73,7 +73,11 @@ Contributions are welcome. Open an issue or submit a pull request and follow the
 
 ## Troubleshooting
 
-- If the app does not load on your device, ensure your computer and device are on the same network.
+- **Mobile Testing (Expo Go)**: The app automatically detects your computer's local IP address to connect to the backend. Ensure your phone and computer are on the **same Wi-Fi network**.
+- If the automatic detection fails, you can manually set the API URL in the `.env` file:
+  ```bash
+  EXPO_PUBLIC_API_URL=http://<YOUR_COMPUTER_IP>:8080
+  ```
 - Use tunnel mode if necessary: `bun run start -- --tunnel`
 - Clear cache: `bunx expo start --clear`
 

@@ -1,7 +1,24 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080';
+// For physical devices (Expo Go), localhost refers to the device itself.
+// We need to use the computer's local IP instead.
+const getBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+
+  const debuggerHost = Constants.expoConfig?.hostUri || Constants.experienceId;
+  const address = debuggerHost?.split(':')[0];
+
+  if (address && !address.includes('localhost') && !address.includes('127.0.0.1')) {
+    return `http://${address}:8080`;
+  }
+
+  return 'http://localhost:8080';
+};
+
+const API_BASE_URL = getBaseUrl();
+console.log('[API] Using Base URL:', API_BASE_URL);
 const AUTH_STORAGE_KEY = 'pesogle_auth';
 
 const apiClient = axios.create({
