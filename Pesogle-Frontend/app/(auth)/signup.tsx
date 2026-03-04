@@ -20,9 +20,13 @@ export default function SignupScreen() {
             console.log('[Signup] OTP sent successfully');
             router.push({ pathname: '/(auth)/otp-verification' as any, params: { email } });
         },
-        onError: (err) => {
+        onError: (err: any) => {
             console.log('[Signup] OTP send error:', err);
-            setError('Failed to send OTP. Please try again.');
+            if (err?.response?.status === 409) {
+                setError('Account already exists. Please log in.');
+            } else {
+                setError('Failed to send OTP. Please try again.');
+            }
         },
     });
 
