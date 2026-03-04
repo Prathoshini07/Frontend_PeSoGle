@@ -12,21 +12,28 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function SetPasswordScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { email, token, refresh_token } = useLocalSearchParams<{ email: string; token: string; refresh_token: string }>();
   const { login } = useAuth();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
 
   const setPasswordMutation = useMutation({
-    mutationFn: () => authService.setPassword({ email: email || '', password, confirmPassword }),
+    mutationFn: () => authService.setPassword({
+      email: email || '',
+      password,
+      confirm_password: confirmPassword,
+      token: token || '',
+      refresh_token: refresh_token || ''
+    }),
     onSuccess: () => {
       console.log('[SetPassword] Success, logging in');
       login(email || '', 'mock-token-' + Date.now(), false);
       router.replace('/profile-creation' as any);
     },
-    onError: () => {
-      setErrors({ password: 'Failed to set password. Please try again.' });
+    onError: (err: any) => {
+      const serverError = err?.response?.data?.detail || 'Failed to set password. Please try again.';
+      setErrors({ password: serverError });
     },
   });
 

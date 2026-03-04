@@ -27,9 +27,16 @@ export default function OtpVerificationScreen() {
 
   const verifyMutation = useMutation({
     mutationFn: () => authService.verifyOtp({ email: email || '', otp: otp.join('') }),
-    onSuccess: () => {
+    onSuccess: (response) => {
       console.log('[OTP] Verified successfully');
-      router.push({ pathname: '/(auth)/set-password' as any, params: { email } });
+      router.push({
+        pathname: '/(auth)/set-password' as any,
+        params: {
+          email,
+          token: response.data.token,
+          refresh_token: response.data.refreshToken
+        }
+      });
     },
     onError: () => {
       setError('Invalid OTP. Please try again.');

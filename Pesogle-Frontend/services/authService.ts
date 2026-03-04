@@ -12,7 +12,9 @@ export interface OtpVerifyRequest {
 export interface SetPasswordRequest {
   email: string;
   password: string;
-  confirmPassword: string;
+  confirm_password: string;
+  token: string;
+  refresh_token: string;
 }
 
 export interface LoginPasswordRequest {
@@ -22,6 +24,7 @@ export interface LoginPasswordRequest {
 
 export interface AuthResponse {
   token: string;
+  refreshToken?: string;
   user: {
     id: string;
     email: string;
@@ -51,6 +54,7 @@ export const authService = {
     return {
       data: {
         token: response.data.access_token,
+        refreshToken: response.data.refresh_token,
         user: {
           id: 'temp-id', // We'll get real ID from profile or decode token if needed
           email: data.email,
@@ -63,15 +67,11 @@ export const authService = {
 
   setPassword: async (data: SetPasswordRequest): Promise<ApiResponse<{ message: string }>> => {
     console.log('[AuthService] Setting password for:', data.email);
-    // Note: The backend expects token and refresh_token in Query params
-    // This might need more logic on the frontend to pass the tokens from state
-    // For now, let's assume the API expects them or we'll adjust the backend if needed
-    // However, I'll follow the backend's current signature as researched
-    const response = await apiClient.post('/auth/api/v1/auth/signup/set-password', {
-      email: data.email,
-      password: data.password,
-      confirm_password: data.confirmPassword,
-    });
+    const { token, refresh_token, ...payload } = data;
+    const response = await apiClient.post(
+      `/auth/api/v1/auth/signup/set-password?token=${token}&refresh_token=${refresh_token}`,
+      payload
+    );
     return response.data;
   },
 
