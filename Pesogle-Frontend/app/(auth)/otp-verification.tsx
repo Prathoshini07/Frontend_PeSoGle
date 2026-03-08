@@ -12,7 +12,7 @@ const OTP_LENGTH = 8;
 
 export default function OtpVerificationScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { email, flowType } = useLocalSearchParams<{ email: string; flowType?: 'signup' | 'reset' }>();
   const [otp, setOtp] = useState<string[]>(new Array(OTP_LENGTH).fill(''));
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(60);
@@ -34,7 +34,8 @@ export default function OtpVerificationScreen() {
         params: {
           email,
           token: response.data.token,
-          refresh_token: response.data.refreshToken
+          refresh_token: response.data.refreshToken,
+          flowType: flowType || 'signup'
         }
       });
     },
@@ -44,7 +45,7 @@ export default function OtpVerificationScreen() {
   });
 
   const resendMutation = useMutation({
-    mutationFn: () => authService.sendOtp({ email: email || '' }),
+    mutationFn: () => authService.sendOtp({ email: email || '', flow_type: flowType || 'signup' }),
     onSuccess: () => {
       setCountdown(60);
       setOtp(new Array(OTP_LENGTH).fill(''));
@@ -53,13 +54,34 @@ export default function OtpVerificationScreen() {
   });
 
   const handleOtpChange = useCallback((text: string, index: number) => {
-    const newOtp = [...otp];
-    newOtp[index] = text;
-    setOtp(newOtp);
     setError('');
+    const newOtp = [...otp];
 
-    if (text && index < OTP_LENGTH - 1) {
-      inputRefs.current[index + 1]?.focus();
+    if (text.length > 1) {
+      // Handle paste
+      const pastedData = text.trim().split('').slice(0, OTP_LENGTH - index);
+      pastedData.forEach((char, i) => {
+        if (index + i < OTP_LENGTH) {
+          newOtp[index + i] = char;
+        }
+      });
+      setOtp(newOtp);
+
+      // Focus the next empty slot or the last slot
+      const nextIndex = index + pastedData.length;
+      if (nextIndex < OTP_LENGTH) {
+        inputRefs.current[nextIndex]?.focus();
+      } else {
+        inputRefs.current[OTP_LENGTH - 1]?.focus();
+      }
+    } else {
+      // Handle single character
+      newOtp[index] = text;
+      setOtp(newOtp);
+
+      if (text && index < OTP_LENGTH - 1) {
+        inputRefs.current[index + 1]?.focus();
+      }
     }
   }, [otp]);
 
@@ -98,10 +120,9 @@ export default function OtpVerificationScreen() {
               ref={(ref) => { inputRefs.current[index] = ref; }}
               style={[styles.otpInput, digit ? styles.otpInputFilled : null, error ? styles.otpInputError : null]}
               value={digit}
-              onChangeText={(text) => handleOtpChange(text.slice(-1), index)}
+              onChangeText={(text) => handleOtpChange(text, index)}
               onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
               keyboardType="number-pad"
-              maxLength={1}
               selectTextOnFocus
               testID={`otp-input-${index}`}
             />

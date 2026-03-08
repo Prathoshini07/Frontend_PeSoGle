@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import Colors from '@/constants/colors';
@@ -8,6 +9,7 @@ import { fontSize, fontWeight, spacing } from '@/constants/theme';
 export default function SplashScreen() {
   const router = useRouter();
   const { status } = useAuth();
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const taglineFade = useRef(new Animated.Value(0)).current;
@@ -34,7 +36,7 @@ export default function SplashScreen() {
       } else {
         router.replace('/onboarding' as any);
       }
-    }, 2200);
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, [status, router]);
@@ -43,20 +45,35 @@ export default function SplashScreen() {
     <View style={styles.container}>
       <View style={styles.decorTop} />
       <View style={styles.decorBottom} />
-      <Animated.View style={[styles.logoArea, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-        <View style={styles.logoMark}>
-          <Text style={styles.logoInitial}>P</Text>
-        </View>
-        <Text style={styles.logoText}>PeSoGle</Text>
-      </Animated.View>
-      <Animated.Text style={[styles.tagline, { opacity: taglineFade }]}>
-        AI-Driven Academic Mentorship
-      </Animated.Text>
-      <Animated.View style={[styles.dots, { opacity: taglineFade }]}>
-        <View style={[styles.dot, styles.dotActive]} />
-        <View style={styles.dot} />
-        <View style={styles.dot} />
-      </Animated.View>
+
+      <View style={styles.content}>
+        <Animated.View
+          style={[
+            styles.logoArea,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          <Image
+            source={require('../assets/images/Pesogle-removebg-preview.png')}
+            style={styles.logoImage}
+            contentFit="contain"
+            transition={500}
+          />
+        </Animated.View>
+
+        <Animated.Text style={[styles.tagline, { opacity: taglineFade }]}>
+          AI-Driven Academic Mentorship
+        </Animated.Text>
+
+        <Animated.View style={[styles.dots, { opacity: taglineFade }]}>
+          <View style={[styles.dot, styles.dotActive]} />
+          <View style={styles.dot} />
+          <View style={styles.dot} />
+        </Animated.View>
+      </View>
     </View>
   );
 }
@@ -86,48 +103,42 @@ const styles = StyleSheet.create({
     borderRadius: 80,
     backgroundColor: Colors.accent + '08',
   },
-  logoArea: {
-    alignItems: 'center',
-  },
-  logoMark: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryDark,
+  content: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
+  },
+  logoArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: 250, // Added height to match logo
     marginBottom: spacing.lg,
   },
-  logoInitial: {
-    fontSize: 40,
-    fontWeight: fontWeight.heavy,
-    color: Colors.white,
-  },
-  logoText: {
-    fontSize: fontSize.hero,
-    fontWeight: fontWeight.heavy,
-    color: Colors.primaryDark,
-    letterSpacing: -1,
+  logoImage: {
+    width: 500, // Significantly larger
+    height: 250,
   },
   tagline: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.xl, // More prominent tagline
     color: Colors.textSecondary,
-    marginTop: spacing.md,
-    fontWeight: fontWeight.medium,
+    marginBottom: spacing.xxl,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
   },
   dots: {
     flexDirection: 'row',
-    gap: 6,
-    marginTop: spacing.xxxl,
+    gap: 8,
+    marginTop: spacing.xl,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.primaryDark + '20',
   },
   dotActive: {
     backgroundColor: Colors.primaryDark,
-    width: 20,
+    width: 24,
   },
 });

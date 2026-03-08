@@ -5,6 +5,7 @@ export default function DiscussionsLayout() {
   return (
     <Stack
       screenOptions={{
+        headerShown: true,
         headerStyle: { backgroundColor: Colors.primaryBg },
         headerTintColor: Colors.primaryDark,
         headerShadowVisible: false,

@@ -2,6 +2,7 @@ import apiClient, { type ApiResponse } from './api';
 
 export interface LoginRequest {
   email: string;
+  flow_type?: 'signup' | 'reset';
 }
 
 export interface OtpVerifyRequest {
@@ -34,9 +35,10 @@ export interface AuthResponse {
 
 export const authService = {
   sendOtp: async (data: LoginRequest): Promise<ApiResponse<{ message: string }>> => {
-    console.log('[AuthService] Sending OTP to:', data.email);
+    console.log('[AuthService] Sending OTP to:', data.email, 'Flow:', data.flow_type || 'signup');
     const response = await apiClient.post('/auth/api/v1/auth/signup/send-otp', {
       email: data.email,
+      flow_type: data.flow_type || 'signup',
     });
     return response.data;
   },

@@ -12,7 +12,12 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function SetPasswordScreen() {
   const router = useRouter();
-  const { email, token, refresh_token } = useLocalSearchParams<{ email: string; token: string; refresh_token: string }>();
+  const { email, token, refresh_token, flowType } = useLocalSearchParams<{
+    email: string;
+    token: string;
+    refresh_token: string;
+    flowType?: 'signup' | 'reset';
+  }>();
   const { login } = useAuth();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -27,9 +32,15 @@ export default function SetPasswordScreen() {
       refresh_token: refresh_token || ''
     }),
     onSuccess: () => {
-      console.log('[SetPassword] Success, logging in');
-      login(email || '', 'mock-token-' + Date.now(), false);
-      router.replace('/profile-creation' as any);
+      console.log('[SetPassword] Success');
+      if (flowType === 'reset') {
+        // After reset, go to login
+        router.replace('/(auth)/login');
+      } else {
+        // Initial setup, continue to profile
+        login(email || '', 'mock-token-' + Date.now(), false);
+        router.replace('/profile-creation' as any);
+      }
     },
     onError: (err: any) => {
       const serverError = err?.response?.data?.detail || 'Failed to set password. Please try again.';
@@ -60,12 +71,16 @@ export default function SetPasswordScreen() {
           <View style={styles.iconCircle}>
             <Lock size={28} color={Colors.primaryDark} />
           </View>
-          <Text style={styles.title}>Set Password</Text>
-          <Text style={styles.subtitle}>Create a secure password for your account</Text>
+          <Text style={styles.title}>{flowType === 'reset' ? 'Reset Password' : 'Set Password'}</Text>
+          <Text style={styles.subtitle}>
+            {flowType === 'reset'
+              ? 'Enter a new password for your account'
+              : 'Create a secure password for your account'}
+          </Text>
         </View>
         <View style={styles.form}>
           <InputField
-            label="New Password"
+            label={flowType === 'reset' ? 'New Password' : 'Password'}
             placeholder="Min. 8 characters"
             value={password}
             onChangeText={(text) => { setPassword(text); setErrors({}); }}
@@ -83,7 +98,7 @@ export default function SetPasswordScreen() {
             testID="confirm-password-input"
           />
           <PrimaryButton
-            title="Set Password & Continue"
+            title={flowType === 'reset' ? 'Reset Password' : 'Set Password & Continue'}
             onPress={handleSubmit}
             loading={setPasswordMutation.isPending}
             disabled={!password || !confirmPassword}
