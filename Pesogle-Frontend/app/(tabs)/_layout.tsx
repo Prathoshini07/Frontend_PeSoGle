@@ -46,7 +46,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="discussions"
         options={{
-          title: 'Discuss',
+          title: 'Posts',
           tabBarIcon: ({ color, size }) => <MessageSquareText size={size} color={color} />,
         }}
       />

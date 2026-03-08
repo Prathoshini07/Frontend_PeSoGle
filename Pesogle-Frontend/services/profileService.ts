@@ -20,6 +20,13 @@ export const profileService = {
     return response.data;
   },
 
+  getProfileById: async (userId: string): Promise<User> => {
+    console.log('[ProfileService] Fetching profile by ID:', userId);
+    // Profile service doesn't wrap in ApiResponse
+    const response = await apiClient.get(`/profile/${userId}`);
+    return response.data;
+  },
+
   createProfile: async (data: ProfileCreateRequest): Promise<ApiResponse<User>> => {
     console.log('[ProfileService] Creating profile:', data.name);
     const response = await apiClient.post('/profile/', data);
