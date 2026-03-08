@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, useWindowDimensions, FlatList, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
 import { Brain, Users, BookOpen } from 'lucide-react-native';
@@ -7,7 +7,7 @@ import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, spacing } from '@/constants/theme';
 import PrimaryButton from '@/components/PrimaryButton';
 
-const { width } = Dimensions.get('window');
+// Width will be handled by useWindowDimensions hook
 
 interface OnboardingSlide {
   id: string;
@@ -43,6 +43,7 @@ const slides: OnboardingSlide[] = [
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -68,7 +69,7 @@ export default function OnboardingScreen() {
 
   const renderSlide = useCallback(({ item, index }: { item: OnboardingSlide; index: number }) => {
     return (
-      <View style={styles.slide}>
+      <View style={[styles.slide, { width }]}>
         <View style={[styles.iconContainer, { backgroundColor: item.accent + '10' }]}>
           <View style={[styles.iconInner, { backgroundColor: item.accent + '15' }]}>
             {item.icon}
@@ -78,7 +79,7 @@ export default function OnboardingScreen() {
         <Text style={styles.slideDescription}>{item.description}</Text>
       </View>
     );
-  }, []);
+  }, [width]);
 
   return (
     <View style={styles.container}>
@@ -99,6 +100,11 @@ export default function OnboardingScreen() {
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
+        getItemLayout={(_, index) => ({
+          length: width,
+          offset: width * index,
+          index,
+        })}
       />
       <View style={styles.bottomArea}>
         <View style={styles.pagination}>
@@ -152,7 +158,6 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
   },
   slide: {
-    width,
     paddingHorizontal: spacing.xxxl,
     alignItems: 'center',
     justifyContent: 'center',

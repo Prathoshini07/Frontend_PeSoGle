@@ -54,13 +54,22 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   }, [authQuery.isSuccess, authQuery.isError, authQuery.data]);
 
   const loginMutation = useMutation({
-    mutationFn: async ({ email, token }: { email: string; token: string }) => {
+    mutationFn: async ({ email, token, profileComplete }: { email: string; token: string; profileComplete: boolean }) => {
       console.log('[Auth] Storing login state');
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ email, token }));
-      return { email, token };
+      if (profileComplete) {
+        await AsyncStorage.setItem(PROFILE_COMPLETE_KEY, 'true');
+      } else {
+        await AsyncStorage.removeItem(PROFILE_COMPLETE_KEY);
+      }
+      return { email, token, profileComplete };
     },
     onSuccess: (data) => {
-      setAuthState({ status: 'needsProfile', email: data.email, token: data.token });
+      setAuthState({
+        status: data.profileComplete ? 'authenticated' : 'needsProfile',
+        email: data.email,
+        token: data.token
+      });
       queryClient.invalidateQueries({ queryKey: ['auth-state'] });
     },
   });
@@ -87,8 +96,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
   });
 
-  const login = useCallback((email: string, token: string) => {
-    loginMutation.mutate({ email, token });
+  const login = useCallback((email: string, token: string, profileComplete: boolean = false) => {
+    loginMutation.mutate({ email, token, profileComplete });
   }, [loginMutation]);
 
   const completeProfile = useCallback(() => {

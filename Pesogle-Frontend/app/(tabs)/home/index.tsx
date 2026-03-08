@@ -25,15 +25,6 @@ export default function HomeScreen() {
       <Stack.Screen
         options={{
           headerTitle: '',
-          headerLeft: () => (
-            <View style={styles.headerLeft}>
-              <Image source={{ uri: currentUser.avatar }} style={styles.headerAvatar} />
-              <View>
-                <Text style={styles.greeting}>Good morning,</Text>
-                <Text style={styles.headerName}>{currentUser.name.split(' ')[0]}</Text>
-              </View>
-            </View>
-          ),
           headerRight: () => (
             <TouchableOpacity style={styles.notifBtn}>
               <Bell size={22} color={Colors.primaryDark} />
@@ -43,6 +34,11 @@ export default function HomeScreen() {
         }}
       />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.contentGreeting}>
+          <Text style={styles.greetingText}>Good morning,</Text>
+          <Text style={styles.userNameText}>{currentUser.name.split(' ')[0]} 👋</Text>
+        </View>
+
         <View style={styles.welcomeCard}>
           <View style={styles.welcomeIcon}>
             <Sparkles size={20} color={Colors.accent} />
@@ -132,6 +128,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.primaryBg,
+  },
+  contentGreeting: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  greetingText: {
+    fontSize: fontSize.md,
+    color: Colors.textSecondary,
+    fontWeight: fontWeight.medium,
+  },
+  userNameText: {
+    fontSize: fontSize.xxxl,
+    fontWeight: fontWeight.heavy,
+    color: Colors.primaryDark,
+    marginTop: 2,
   },
   headerLeft: {
     flexDirection: 'row',

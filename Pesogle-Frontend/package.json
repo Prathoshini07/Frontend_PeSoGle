@@ -47,6 +47,11 @@
     "zod": "^4.3.6",
     "zustand": "^5.0.2"
   },
+  "overrides": {
+    "lucide-react-native": {
+      "react": "$react"
+    }
+  },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@expo/ngrok": "^4.1.0",
