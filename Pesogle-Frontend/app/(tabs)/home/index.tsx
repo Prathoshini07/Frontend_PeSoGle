@@ -2,17 +2,18 @@ import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
-import { Image } from 'expo-image';
 import { Bell, ChevronRight, TrendingUp, Sparkles, BookOpen } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import UserCard from '@/components/UserCard';
 import PostCard from '@/components/PostCard';
-import { mockUsers, currentUser } from '@/mocks/users';
+import { mockUsers } from '@/mocks/users';
 import { mockPosts } from '@/mocks/posts';
+import { useAuth } from '@/context/AuthContext';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { email } = useAuth();
   const topMentors = mockUsers.filter(u => u.role === 'mentor' || u.matchPercentage >= 80).slice(0, 4);
   const trendingPosts = mockPosts.slice(0, 3);
 
@@ -36,7 +37,9 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.contentGreeting}>
           <Text style={styles.greetingText}>Good morning,</Text>
-          <Text style={styles.userNameText}>{currentUser.name.split(' ')[0]} 👋</Text>
+          <Text style={styles.userNameText}>
+            {(email ? email.split('@')[0] : 'Student')} 👋
+          </Text>
         </View>
 
         <View style={styles.welcomeCard}>

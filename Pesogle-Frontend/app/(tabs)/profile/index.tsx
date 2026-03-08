@@ -1,23 +1,69 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
-import { Image } from 'expo-image';
 import { Settings, Edit3, MessageCircle, Award, BookOpen, Target, Briefcase, LogOut } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import TagChip from '@/components/TagChip';
-import { currentUser } from '@/mocks/users';
 import { useAuth } from '@/context/AuthContext';
+import { profileService, type ProfileResponse } from '@/services/profileService';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { logout } = useAuth();
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogout = useCallback(() => {
     logout();
     router.replace('/');
   }, [logout, router]);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await profileService.getProfile();
+      setProfile(result);
+    } catch (e) {
+      console.error('[ProfileScreen] Failed to load profile', e);
+      const isNetworkError =
+        (e as { code?: string; message?: string })?.code === 'ERR_NETWORK' ||
+        (e as { message?: string })?.message === 'Network Error';
+      setError(
+        isNetworkError
+          ? "Can't reach the server. Make sure the backend is running (e.g. at http://localhost:8001)."
+          : 'Failed to load profile'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  if (isLoading && !profile) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primaryDark} />
+      </View>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error ?? 'Profile not found'}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -38,21 +84,30 @@ export default function ProfileScreen() {
       />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileCard}>
-          <Image source={{ uri: currentUser.avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{currentUser.name}</Text>
-          <Text style={styles.deptYear}>{currentUser.department} · {currentUser.year}</Text>
+          <View style={styles.avatar} />
+          <Text style={styles.name}>{profile.personal_info.full_name}</Text>
+          <Text style={styles.deptYear}>
+            {(profile.personal_info.branch_or_domain[0] || 'Unknown Branch')} · Batch {profile.personal_info.academic_batch}
+          </Text>
           <View style={styles.scoreBadge}>
             <Award size={16} color={Colors.primaryDark} />
-            <Text style={styles.scoreText}>Academic Score: {currentUser.academicScore}/100</Text>
+            <Text style={styles.scoreText}>Academic Profile</Text>
           </View>
-          <TouchableOpacity style={styles.editBtn}>
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => router.push('/profile-creation' as any)}
+          >
             <Edit3 size={14} color={Colors.primaryDark} />
             <Text style={styles.editText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.bioCard}>
-          <Text style={styles.bioText}>{currentUser.bio}</Text>
+          <Text style={styles.bioText}>
+            {profile.skills_and_interests.skills.length > 0 || profile.skills_and_interests.interests.length > 0
+              ? `Skills: ${profile.skills_and_interests.skills.join(', ')}`
+              : 'No additional bio information yet.'}
+          </Text>
         </View>
 
         <View style={styles.sectionCard}>
@@ -61,7 +116,9 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Domains</Text>
           </View>
           <View style={styles.chipsWrap}>
-            {currentUser.domains.map(d => <TagChip key={d} label={d} />)}
+            {profile.personal_info.branch_or_domain.map(d => (
+              <TagChip key={d} label={d} />
+            ))}
           </View>
         </View>
 
@@ -71,19 +128,23 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Skills</Text>
           </View>
           <View style={styles.chipsWrap}>
-            {currentUser.skills.map(s => <TagChip key={s} label={s} small />)}
+            {profile.skills_and_interests.skills.map(s => (
+              <TagChip key={s} label={s} small />
+            ))}
           </View>
         </View>
 
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Target size={18} color={Colors.primaryDark} />
-            <Text style={styles.sectionTitle}>Goals</Text>
+            <Text style={styles.sectionTitle}>Experience</Text>
           </View>
-          {currentUser.goals.map(goal => (
-            <View key={goal} style={styles.goalItem}>
+          {profile.experience.map(exp => (
+            <View key={`${exp.company}-${exp.role}-${exp.duration}`} style={styles.goalItem}>
               <View style={styles.goalDot} />
-              <Text style={styles.goalText}>{goal}</Text>
+              <Text style={styles.goalText}>
+                {exp.role} @ {exp.company} ({exp.duration})
+              </Text>
             </View>
           ))}
         </View>
@@ -93,9 +154,9 @@ export default function ProfileScreen() {
             <Briefcase size={18} color={Colors.primaryDark} />
             <Text style={styles.sectionTitle}>Projects</Text>
           </View>
-          {currentUser.projects.map(project => (
-            <View key={project} style={styles.projectItem}>
-              <Text style={styles.projectText}>{project}</Text>
+          {profile.projects.map(project => (
+            <View key={project.title} style={styles.projectItem}>
+              <Text style={styles.projectText}>{project.title}</Text>
             </View>
           ))}
         </View>
@@ -278,5 +339,35 @@ const styles = StyleSheet.create({
   actionSub: {
     fontSize: fontSize.xs,
     color: Colors.textMuted,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryBg,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryBg,
+    paddingHorizontal: spacing.xl,
+  },
+  errorText: {
+    fontSize: fontSize.md,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  retryButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: Colors.white,
   },
 });

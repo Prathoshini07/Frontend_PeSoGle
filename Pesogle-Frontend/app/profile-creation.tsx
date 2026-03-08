@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Stack } from 'expo-router';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+// @ts-expect-error - expo-router exports useRouter at runtime; types may be out of sync
+import { useRouter, Stack } from 'expo-router';
 import { User, Layers, Target } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
@@ -11,6 +11,7 @@ import SecondaryButton from '@/components/SecondaryButton';
 import TagChip from '@/components/TagChip';
 import { useAuth } from '@/context/AuthContext';
 import { domains, skillsList } from '@/mocks/users';
+import { profileService, type ProfileCreateRequest, type ProfileResponse, type Degree, type Project, type Experience } from '@/services/profileService';
 
 const STEPS = [
   { icon: User, label: 'Basic Info' },
@@ -20,25 +21,41 @@ const STEPS = [
 
 const years = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Masters', 'PhD', 'Faculty'];
 const departments = [
-  'Computer Science', 'Data Science', 'Software Engineering',
-  'Electrical Engineering', 'Mechanical Engineering', 'Mathematics',
-  'Physics', 'Chemistry', 'Biology', 'Business Administration',
+  'Computer Science', 'AI and ML', 'IT', 'ECE',
+  'EEE', 'CSE', 'MCA',
+  'Physics', 'Chemistry', 'Biology', 'Business Administration', 'AMCS',
+  'Civil Engineering', 'Chemical Engineering', 'Electronics and Communication Engineering',
+  'Mechanical Engineering', 'Production Engineering',
 ];
+
+const degrees: Degree[] = ['B.Tech', 'M.Sc', 'M.Tech', 'PhD'];
 
 export default function ProfileCreationScreen() {
   const router = useRouter();
   const { completeProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
+  const [institution, setInstitution] = useState('');
+  const [degree, setDegree] = useState<Degree | ''>('');
   const [department, setDepartment] = useState('');
-  const [year, setYear] = useState('');
+  const [academicBatch, setAcademicBatch] = useState('');
   const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [projectInput, setProjectInput] = useState('');
-  const [projects, setProjects] = useState<string[]>([]);
+  const [projectRole, setProjectRole] = useState('');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectDescription, setProjectDescription] = useState('');
+  const [projectTechStack, setProjectTechStack] = useState('');
+  const [experienceCompany, setExperienceCompany] = useState('');
+  const [experienceRole, setExperienceRole] = useState('');
+  const [experienceDuration, setExperienceDuration] = useState('');
+  const [experiences, setExperiences] = useState<Experience[]>([]);
   const [goalInput, setGoalInput] = useState('');
   const [goals, setGoals] = useState<string[]>([]);
   const [bio, setBio] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   const toggleDomain = useCallback((domain: string) => {
     setSelectedDomains(prev =>
@@ -53,11 +70,37 @@ export default function ProfileCreationScreen() {
   }, []);
 
   const addProject = useCallback(() => {
-    if (projectInput.trim()) {
-      setProjects(prev => [...prev, projectInput.trim()]);
+    if (projectInput.trim() && projectRole.trim()) {
+      const newProject: Project = {
+        title: projectInput.trim(),
+        description: projectDescription.trim() || null,
+        tech_stack: projectTechStack
+          .split(',')
+          .map(t => t.trim())
+          .filter(Boolean),
+        role: projectRole.trim(),
+      };
+      setProjects(prev => [...prev, newProject]);
       setProjectInput('');
+      setProjectRole('');
+      setProjectDescription('');
+      setProjectTechStack('');
     }
-  }, [projectInput]);
+  }, [projectInput, projectRole, projectDescription, projectTechStack]);
+
+  const addExperience = useCallback(() => {
+    if (experienceCompany.trim() && experienceRole.trim() && experienceDuration.trim()) {
+      const newExperience: Experience = {
+        company: experienceCompany.trim(),
+        role: experienceRole.trim(),
+        duration: experienceDuration.trim(),
+      };
+      setExperiences(prev => [...prev, newExperience]);
+      setExperienceCompany('');
+      setExperienceRole('');
+      setExperienceDuration('');
+    }
+  }, [experienceCompany, experienceRole, experienceDuration]);
 
   const addGoal = useCallback(() => {
     if (goalInput.trim()) {
@@ -66,21 +109,112 @@ export default function ProfileCreationScreen() {
     }
   }, [goalInput]);
 
-  const handleNext = useCallback(() => {
+  useEffect(() => {
+    let isMounted = true;
+    const loadExistingProfile = async () => {
+      try {
+        const existing = await profileService.getProfile();
+        if (!isMounted) return;
+
+        setIsEditMode(true);
+        setName(existing.personal_info.full_name);
+        setInstitution(existing.personal_info.institution);
+        setDegree(existing.personal_info.degree);
+        setDepartment(existing.personal_info.branch_or_domain[0] ?? '');
+        setAcademicBatch(String(existing.personal_info.academic_batch));
+        setSelectedSkills(existing.skills_and_interests.skills);
+        setSelectedDomains(existing.skills_and_interests.interests);
+        setProjects(existing.projects);
+        setExperiences(existing.experience);
+      } catch (e) {
+        console.log('[ProfileCreation] No existing profile or failed to load, creating new.', e);
+      } finally {
+        if (isMounted) {
+          setIsLoadingProfile(false);
+        }
+      }
+    };
+
+    loadExistingProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleNext = async () => {
     if (step < 2) {
-      setStep(step + 1);
-    } else {
-      completeProfile();
-      router.replace('/(tabs)/home' as any);
+      setStep(prev => prev + 1);
+      return;
     }
-  }, [step, completeProfile, router]);
+
+    if (!canProceed || isSubmitting) {
+      return;
+    }
+
+    const parsedBatch = parseInt(academicBatch, 10);
+    if (Number.isNaN(parsedBatch)) {
+      Alert.alert('Invalid batch year', 'Please enter a valid numeric academic batch year (e.g. 2024).');
+      return;
+    }
+
+    const payload: ProfileCreateRequest = {
+      personal_info: {
+        full_name: name.trim(),
+        institution: institution.trim(),
+        degree: degree as Degree,
+        branch_or_domain: department ? [department] : [],
+        academic_batch: parsedBatch,
+      },
+      skills_and_interests: {
+        skills: selectedSkills,
+        interests: selectedDomains,
+      },
+      projects,
+      experience: experiences,
+    };
+
+    try {
+      setIsSubmitting(true);
+      if (isEditMode) {
+        await profileService.updateProfile(payload);
+        completeProfile();
+        router.replace('/(tabs)/home' as any);
+        return;
+      }
+
+      try {
+        // Try creating a new profile first
+        await profileService.createProfile(payload);
+        completeProfile();
+        router.replace('/(tabs)/home' as any);
+      } catch (error: any) {
+        const status = error?.response?.status;
+        // If backend says profile already exists (409), fall back to update
+        if (status === 409) {
+          console.log('[ProfileCreation] Profile exists, updating instead of creating.');
+          await profileService.updateProfile(payload);
+          completeProfile();
+          router.replace('/(tabs)/home' as any);
+        } else {
+          console.error('[ProfileCreation] Failed to create/update profile', error);
+          Alert.alert(
+            'Could not complete profile',
+            'Something went wrong while saving your profile. Please try again.'
+          );
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleBack = useCallback(() => {
     if (step > 0) setStep(step - 1);
   }, [step]);
 
   const canProceed = step === 0
-    ? name.trim() && department && year
+    ? name.trim() && institution.trim() && degree && academicBatch.trim()
     : step === 1
     ? selectedDomains.length > 0 && selectedSkills.length > 0
     : true;
@@ -114,18 +248,31 @@ export default function ProfileCreationScreen() {
               <Text style={styles.stepTitle}>Tell us about yourself</Text>
               <Text style={styles.stepSubtitle}>This helps us personalize your experience</Text>
               <InputField label="Full Name" placeholder="Enter your full name" value={name} onChangeText={setName} testID="name-input" />
+              <InputField
+                label="Institution"
+                placeholder="Enter your institution name"
+                value={institution}
+                onChangeText={setInstitution}
+              />
+              <Text style={styles.sectionLabel}>Degree</Text>
+              <View style={styles.chipsWrap}>
+                {degrees.map(d => (
+                  <TagChip key={d} label={d} selected={degree === d} onPress={() => setDegree(d)} />
+                ))}
+              </View>
               <Text style={styles.sectionLabel}>Department</Text>
               <View style={styles.chipsWrap}>
                 {departments.map(dept => (
                   <TagChip key={dept} label={dept} selected={department === dept} onPress={() => setDepartment(dept)} />
                 ))}
               </View>
-              <Text style={styles.sectionLabel}>Year</Text>
-              <View style={styles.chipsWrap}>
-                {years.map(y => (
-                  <TagChip key={y} label={y} selected={year === y} onPress={() => setYear(y)} />
-                ))}
-              </View>
+              <InputField
+                label="Academic Batch (Year)"
+                placeholder="e.g. 2024"
+                value={academicBatch}
+                onChangeText={setAcademicBatch}
+                keyboardType="numeric"
+              />
             </View>
           )}
 
@@ -160,10 +307,83 @@ export default function ProfileCreationScreen() {
                 onSubmitEditing={addProject}
                 returnKeyType="done"
               />
+              <InputField
+                label="Your Role in this Project"
+                placeholder="e.g. Backend Developer"
+                value={projectRole}
+                onChangeText={setProjectRole}
+                onSubmitEditing={addProject}
+                returnKeyType="done"
+              />
+              <InputField
+                label="Project Description (optional)"
+                placeholder="Briefly describe this project"
+                value={projectDescription}
+                onChangeText={setProjectDescription}
+                multiline
+                numberOfLines={3}
+              />
+              <InputField
+                label="Tech Stack (comma separated)"
+                placeholder="e.g. React, Node.js, PostgreSQL"
+                value={projectTechStack}
+                onChangeText={setProjectTechStack}
+                onSubmitEditing={addProject}
+                returnKeyType="done"
+              />
               {projects.length > 0 && (
                 <View style={styles.chipsWrap}>
                   {projects.map(p => (
-                    <TagChip key={p} label={p} selected onPress={() => setProjects(prev => prev.filter(x => x !== p))} />
+                    <TagChip
+                      key={p.title}
+                      label={p.title}
+                      selected
+                      onPress={() => setProjects(prev => prev.filter(x => x.title !== p.title))}
+                    />
+                  ))}
+                </View>
+              )}
+              <Text style={styles.sectionLabel}>Experience</Text>
+              <InputField
+                label="Company"
+                placeholder="e.g. Acme Corp"
+                value={experienceCompany}
+                onChangeText={setExperienceCompany}
+              />
+              <InputField
+                label="Role"
+                placeholder="e.g. Software Engineer Intern"
+                value={experienceRole}
+                onChangeText={setExperienceRole}
+              />
+              <InputField
+                label="Duration"
+                placeholder="e.g. Jun 2023 - Aug 2023"
+                value={experienceDuration}
+                onChangeText={setExperienceDuration}
+                onSubmitEditing={addExperience}
+                returnKeyType="done"
+              />
+              {experiences.length > 0 && (
+                <View style={styles.chipsWrap}>
+                  {experiences.map(exp => (
+                    <TagChip
+                      key={`${exp.company}-${exp.role}-${exp.duration}`}
+                      label={`${exp.role} @ ${exp.company} (${exp.duration})`}
+                      selected
+                      onPress={() =>
+                        setExperiences(prev =>
+                          prev.filter(
+                            x =>
+                              !(
+                                x.company === exp.company &&
+                                x.role === exp.role &&
+                                x.duration === exp.duration
+                              ),
+                          )
+                        )
+                      }
+                    />
                   ))}
                 </View>
               )}
@@ -201,7 +421,7 @@ export default function ProfileCreationScreen() {
           <PrimaryButton
             title={step === 2 ? 'Complete Profile' : 'Continue'}
             onPress={handleNext}
-            disabled={!canProceed}
+            disabled={!canProceed || isSubmitting}
             style={styles.nextBtn}
           />
         </View>
