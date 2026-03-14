@@ -1,6 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 
 // For physical devices (Expo Go), localhost refers to the device itself.
 // We need to use the computer's local IP instead.
@@ -38,6 +39,11 @@ apiClient.interceptors.request.use(
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+      } else {
+        // Fallback DEV token for testing the backend bypass
+        // This simulates random token just to pass HTTPBearer(auto_error=False) 
+        // Backend DEV_MODE handles the actual User ID resolution
+        config.headers.Authorization = `Bearer dev_override_token`;
       }
     } catch (e) {
       console.log('[API] Interceptor error fetching token:', e);
@@ -57,8 +63,22 @@ apiClient.interceptors.response.use(
     console.log(`[API] Response ${response.status} from ${response.config.url}`);
     return response;
   },
-  (error) => {
+  async (error) => {
     console.log('[API] Response error:', error?.response?.status, error?.message);
+    if (error?.response?.status === 401) {
+      console.log('[API] Unauthorized. Purging auth and redirecting to login.');
+      try {
+        await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      } catch (e) {
+        // ignore storage clear errors
+      }
+      try {
+        // Handle global redirect
+        router.replace('/(auth)/login');
+      } catch (e) {
+        console.warn('[API] Router navigate failed. Possibly rendering context issue:', e);
+      }
+    }
     return Promise.reject(error);
   }
 );

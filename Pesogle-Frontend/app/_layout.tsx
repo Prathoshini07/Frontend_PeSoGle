@@ -30,6 +30,7 @@ function RootLayoutNav() {
       <Stack.Screen name="chat/[id]" options={{ title: "Chat" }} />
       <Stack.Screen name="resume-bot" options={{ title: "Resume Bot" }} />
       <Stack.Screen name="career-simulator" options={{ title: "Career Simulator" }} />
+      <Stack.Screen name="user/[id]" options={{ presentation: 'modal', title: "Profile Details" }} />
     </Stack>
   );
 }

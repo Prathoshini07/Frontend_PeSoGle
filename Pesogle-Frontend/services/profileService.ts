@@ -66,4 +66,10 @@ export const profileService = {
     const response = await apiClient.put<ProfileResponse>('/profile/api/v1/profile/me', data);
     return response.data;
   },
+
+  getProfileById: async (userId: string): Promise<ProfileResponse> => {
+    console.log(`[ProfileService] Fetching profile for user: ${userId}`);
+    const response = await apiClient.get<ProfileResponse>(`/profile/api/v1/profile/${userId}`);
+    return response.data;
+  },
 };

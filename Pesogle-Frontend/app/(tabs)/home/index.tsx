@@ -10,7 +10,7 @@ import PostCard from '@/components/PostCard';
 import { mockUsers, currentUser } from '@/mocks/users';
 import { postService } from '@/services/postService';
 import type { Post } from '@/mocks/posts';
-
+import { mockPosts } from '@/mocks/posts';
 import { useAuth } from '@/context/AuthContext';
 
 export default function HomeScreen() {
