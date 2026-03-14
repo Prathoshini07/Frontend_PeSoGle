@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
@@ -7,6 +7,9 @@ import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import UserCard from '@/components/UserCard';
 import PostCard from '@/components/PostCard';
+import { mockUsers, currentUser } from '@/mocks/users';
+import { postService } from '@/services/postService';
+import type { Post } from '@/mocks/posts';
 import { mockUsers } from '@/mocks/users';
 import { mockPosts } from '@/mocks/posts';
 import { useAuth } from '@/context/AuthContext';
@@ -15,7 +18,21 @@ export default function HomeScreen() {
   const router = useRouter();
   const { email } = useAuth();
   const topMentors = mockUsers.filter(u => u.role === 'mentor' || u.matchPercentage >= 80).slice(0, 4);
-  const trendingPosts = mockPosts.slice(0, 3);
+  const [trendingPosts, setTrendingPosts] = useState<Post[]>([]);
+
+  useEffect(() => {
+    const fetchTrending = async () => {
+      try {
+        const response = await postService.getPosts();
+        if (response.success && response.data) {
+          setTrendingPosts(response.data.slice(0, 3));
+        }
+      } catch (error) {
+        console.log('[Home] Failed to fetch trending posts:', error);
+      }
+    };
+    fetchTrending();
+  }, []);
 
   const renderMentorCard = useCallback(({ item }: { item: typeof mockUsers[0] }) => (
     <UserCard user={item} compact onPress={() => console.log('[Home] View mentor:', item.id)} />
