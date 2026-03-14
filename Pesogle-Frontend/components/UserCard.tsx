@@ -10,10 +10,14 @@ interface UserCardProps {
   onPress?: () => void;
   onConnect?: () => void;
   compact?: boolean;
+  requested?: boolean;
+  connected?: boolean;
   testID?: string;
 }
 
-export default function UserCard({ user, onPress, onConnect, compact, testID }: UserCardProps) {
+
+export default function UserCard({ user, onPress, onConnect, compact, requested, connected, testID }: UserCardProps) {
+
   const matchColor = user.matchPercentage >= 80 ? Colors.matchHigh
     : user.matchPercentage >= 60 ? Colors.matchMedium
     : Colors.matchLow;
@@ -67,10 +71,21 @@ export default function UserCard({ user, onPress, onConnect, compact, testID }: 
         <TouchableOpacity style={styles.viewBtn} onPress={onPress}>
           <Text style={styles.viewBtnText}>View Profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.connectBtn} onPress={onConnect}>
-          <Text style={styles.connectBtnText}>Connect</Text>
-        </TouchableOpacity>
+        {connected ? (
+          <View style={[styles.connectBtn, styles.connectedBtn]}>
+            <Text style={styles.connectedBtnText}>Connected</Text>
+          </View>
+        ) : requested ? (
+          <View style={[styles.connectBtn, styles.requestedBtn]}>
+            <Text style={styles.requestedBtnText}>Requested</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.connectBtn} onPress={onConnect}>
+            <Text style={styles.connectBtnText}>Connect</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
     </TouchableOpacity>
   );
 }
@@ -194,7 +209,26 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
     color: Colors.white,
   },
+  requestedBtn: {
+    backgroundColor: Colors.borderLight,
+  },
+  requestedBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: Colors.textMuted,
+  },
+  connectedBtn: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  connectedBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: '#10B981',
+  },
   compactCard: {
+
     backgroundColor: Colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,

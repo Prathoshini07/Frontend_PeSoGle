@@ -178,4 +178,72 @@ export const connectService = {
             return { data: [], success: false, message: 'Failed to fetch requests' };
         }
     },
+
+    getOutgoingRequestsWithProfiles: async (): Promise<ApiResponse<(ConnectRequest & { receiver: User })[]>> => {
+        try {
+            const response = await connectService.getOutgoingRequests();
+            const requests = response.data;
+
+            const richRequests = await Promise.all(
+                requests.map(async (req) => {
+                    try {
+                        const profile = await profileService.getProfileById(req.receiver_id);
+                        const receiver: User = {
+                            id: profile.user_id,
+                            name: profile.personal_info.full_name,
+                            email: profile.email,
+                            department: profile.personal_info.institution,
+                            year: `${profile.personal_info.academic_batch} Batch`,
+                            domains: profile.personal_info.branch_or_domain,
+                            skills: profile.skills_and_interests.skills,
+                            projects: profile.projects.map((p: any) => p.title),
+                            goals: profile.skills_and_interests.interests,
+                            bio: profile.projects[0]?.description || 'Outgoing Request',
+                            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.personal_info.full_name)}&background=random`,
+                            matchPercentage: 0,
+                            matchReason: 'Outgoing Request',
+                            academicScore: 0,
+                            role: 'student',
+                        };
+                        return { ...req, receiver };
+                    } catch (e) {
+                        return null;
+                    }
+                })
+            );
+
+            return { data: richRequests.filter((r): r is (ConnectRequest & { receiver: User }) => r !== null), success: true };
+        } catch (error) {
+            return { data: [], success: false, message: 'Failed to fetch outgoing requests' };
+        }
+    },
+
+    getBlockedUsersWithProfiles: async (): Promise<ApiResponse<User[]>> => {
+        try {
+            const response = await connectService.getBlockedUsers();
+            const blocks = response.data;
+
+            const users = await Promise.all(
+                blocks.map(async (block) => {
+                    try {
+                        const profile = await profileService.getProfileById(block.blocked_id);
+                        return {
+                            id: profile.user_id,
+                            name: profile.personal_info.full_name,
+                            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.personal_info.full_name)}&background=random`,
+                            bio: 'Blocked connection',
+                            matchPercentage: 0,
+                        } as User;
+                    } catch (e) {
+                        return null;
+                    }
+                })
+            );
+
+            return { data: users.filter((u): u is User => u !== null), success: true };
+        } catch (error) {
+            return { data: [], success: false, message: 'Failed to fetch blocked users' };
+        }
+    },
 };
+

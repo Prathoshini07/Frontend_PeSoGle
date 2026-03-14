@@ -6,6 +6,8 @@ export interface Comment {
   target_type: string;
   target_id: string;
   author_id: string;
+  author_name?: string;
+  author_avatar?: string;
   content: string;
   created_at: string;
 }
@@ -14,11 +16,14 @@ export interface Answer {
   answer_id: string;
   question_id: string;
   author_id: string;
+  author_name?: string;
+  author_avatar?: string;
   content: string;
   upvote_count: number;
   is_accepted: boolean;
   created_at: string;
 }
+
 
 export interface CreatePostData {
   type: string;
@@ -41,15 +46,16 @@ export const postService = {
       id: raw.post_id || raw._id || Math.random().toString(),
       type: raw.type || 'POST',
       authorId: raw.author_id || 'unknown',
-      authorName: raw.author_name || 'Anonymous User', // If not available from backend yet
-      authorAvatar: raw.author_avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=face',
+      authorName: raw.author_name || 'Anonymous User',
+      authorAvatar: raw.author_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(raw.author_name || 'User')}&background=random`,
       authorDepartment: raw.author_department || 'General',
       title: raw.title,
       content: raw.content,
       category: raw.category,
       upvotes: raw.upvote_count || 0,
-      answers: raw.answer_count || 0,
+      answers: raw.type === 'QUESTION' ? (raw.answer_count || 0) : (raw.comment_count || 0),
       hasAcceptedAnswer: !!raw.accepted_answer_id,
+
       createdAt: raw.created_at ? new Date(raw.created_at).toLocaleDateString() : 'Just now',
       tags: raw.tags || [],
       media: raw.media || [],
@@ -68,14 +74,15 @@ export const postService = {
       type: raw.type || 'POST',
       authorId: raw.author_id || 'unknown',
       authorName: raw.author_name || 'Anonymous User',
-      authorAvatar: raw.author_avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=face',
+      authorAvatar: raw.author_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(raw.author_name || 'User')}&background=random`,
       authorDepartment: raw.author_department || 'General',
       title: raw.title,
       content: raw.content,
       category: raw.category,
       upvotes: raw.upvote_count || 0,
-      answers: raw.answer_count || 0,
+      answers: raw.type === 'QUESTION' ? (raw.answer_count || 0) : (raw.comment_count || 0),
       hasAcceptedAnswer: !!raw.accepted_answer_id,
+
       createdAt: raw.created_at ? new Date(raw.created_at).toLocaleDateString() : 'Just now',
       tags: raw.tags || [],
       media: raw.media || [],
@@ -94,14 +101,15 @@ export const postService = {
       type: raw.type || 'POST',
       authorId: raw.author_id || 'unknown',
       authorName: raw.author_name || 'Anonymous User',
-      authorAvatar: raw.author_avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=face',
+      authorAvatar: raw.author_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(raw.author_name || 'User')}&background=random`,
       authorDepartment: raw.author_department || 'General',
       title: raw.title,
       content: raw.content,
       category: raw.category,
       upvotes: raw.upvote_count || 0,
-      answers: raw.answer_count || 0,
+      answers: raw.type === 'QUESTION' ? (raw.answer_count || 0) : (raw.comment_count || 0),
       hasAcceptedAnswer: !!raw.accepted_answer_id,
+
       createdAt: raw.created_at ? new Date(raw.created_at).toLocaleDateString() : 'Just now',
       tags: raw.tags || [],
       media: raw.media || [],
@@ -109,6 +117,7 @@ export const postService = {
 
     return { data: post, success: true };
   },
+
 
   uploadMedia: async (postId: string, files: any[]): Promise<ApiResponse<any>> => {
     console.log('[PostService] Uploading media for post:', postId);

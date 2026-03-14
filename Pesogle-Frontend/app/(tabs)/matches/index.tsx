@@ -21,6 +21,9 @@ export default function MatchesScreen() {
   const [roleFilter, setRoleFilter] = useState('All');
   const [domainFilter, setDomainFilter] = useState('All');
   
+  const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
+  const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
+  
   // Perfect Match State
   const [showPerfectMatchModal, setShowPerfectMatchModal] = useState(false);
   const [perfectMatchPurpose, setPerfectMatchPurpose] = useState('');
@@ -40,22 +43,48 @@ export default function MatchesScreen() {
 
   const matches = isPerfectMatchMode ? perfectMatches : (recommendationsRes?.data || []);
 
+  // Fetch initial connection status
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const [outgoingRes, connectionsRes] = await Promise.all([
+          connectService.getOutgoingRequests(),
+          connectService.getConnectionIds()
+        ]);
+        
+        if (outgoingRes.success) {
+          setSentRequests(new Set(outgoingRes.data.map(r => r.receiver_id)));
+        }
+        if (connectionsRes.success) {
+          setConnectedIds(new Set(connectionsRes.data.connection_ids));
+        }
+      } catch (err) {
+        console.error('[MatchesScreen] Failed to fetch connection status:', err);
+      }
+    };
+    fetchStatus();
+  }, []);
+
   const handleConnect = useCallback(async (user: User) => {
     try {
       const response = await connectService.sendRequest(user.id);
       if (response.success) {
+        setSentRequests(prev => new Set([...prev, user.id]));
         Alert.alert('Connection Sent', `Request sent to ${user.name}`);
       } else {
         Alert.alert('Error', response.message || 'Failed to send connection request');
       }
     } catch (err: any) {
       if (err?.response?.status === 409) {
+        setSentRequests(prev => new Set([...prev, user.id]));
         Alert.alert('Note', 'A connection request has already been sent to this user or you are already connected.');
       } else {
         Alert.alert('Error', 'An unexpected error occurred');
       }
     }
   }, []);
+
+
 
   const handlePerfectMatchSubmit = async () => {
     if (!perfectMatchPurpose.trim()) return;
@@ -83,8 +112,11 @@ export default function MatchesScreen() {
       user={item}
       onPress={() => router.push(`/user/${item.id}` as any)}
       onConnect={() => handleConnect(item)}
+      requested={sentRequests.has(item.id)}
+      connected={connectedIds.has(item.id)}
     />
-  ), [handleConnect, router]);
+  ), [handleConnect, router, sentRequests, connectedIds]);
+
 
   const hasActiveFilters = roleFilter !== 'All' || domainFilter !== 'All';
   const isLoading = isRecsLoading || isPerfectMatchLoading;

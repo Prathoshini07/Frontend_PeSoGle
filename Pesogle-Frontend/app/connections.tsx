@@ -19,25 +19,59 @@ export default function ConnectionsScreen() {
     queryFn: () => connectService.getConnectionsWithProfiles().then(res => res.data),
   });
 
-  const { data: requests = [], isLoading: isLoadingRequests, refetch: refetchRequests } = useQuery({
-    queryKey: ['connection-requests'],
-    queryFn: () => connectService.getIncomingRequestsWithProfiles().then(res => res.data),
+  const { data: incomingRequests = [], isLoading: isLoadingIncoming, refetch: refetchIncoming } = useQuery({
+    queryKey: ['connection-requests-incoming'],
+    queryFn: () => connectService.getIncomingRequestsWithProfiles().then(res => res.data.map(req => ({
+      ...req,
+      user: req.sender,
+      type: 'incoming' as const
+    }))),
   });
+
+  const { data: outgoingRequests = [], isLoading: isLoadingOutgoing, refetch: refetchOutgoing } = useQuery({
+    queryKey: ['connection-requests-outgoing'],
+    queryFn: () => connectService.getOutgoingRequestsWithProfiles().then(res => res.data.map(req => ({
+      ...req,
+      user: req.receiver,
+      type: 'outgoing' as const
+    }))),
+    enabled: tab === 'pending',
+  });
+
+  const [pendingSubTab, setPendingSubTab] = useState<'received' | 'sent'>('received');
+
 
   const acceptMutation = useMutation({
     mutationFn: (requestId: string) => connectService.acceptRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] });
-      queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['connection-requests-incoming'] });
     },
   });
 
   const rejectMutation = useMutation({
     mutationFn: (requestId: string) => connectService.rejectRequest(requestId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['connection-requests-incoming'] });
     },
   });
+
+  const unblockMutation = useMutation({
+    mutationFn: (userId: string) => connectService.unblockUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['blocked-users'] });
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      setTab('chats');
+    },
+  });
+
+
+  const { data: blockedUsers = [], isLoading: isLoadingBlocked, refetch: refetchBlocked } = useQuery({
+    queryKey: ['blocked-users'],
+    queryFn: () => connectService.getBlockedUsersWithProfiles().then(res => res.data),
+    enabled: tab === 'blocked',
+  });
+
 
   const renderThread = useCallback(({ item }: { item: User }) => (
     <TouchableOpacity
@@ -51,33 +85,58 @@ export default function ConnectionsScreen() {
           <Text style={styles.threadName}>{item.name}</Text>
           <Text style={styles.threadTime}>Connected</Text>
         </View>
-        <Text style={styles.threadMessage} numberOfLines={1}>{item.bio}</Text>
       </View>
       <MessageCircle size={20} color={Colors.primaryDark} style={{ opacity: 0.6 }} />
     </TouchableOpacity>
   ), [router]);
 
-  const renderPending = useCallback(({ item }: { item: ConnectRequest & { sender: User } }) => (
+  const renderPendingItem = useCallback(({ item }: { item: ConnectRequest & { user: User; type: 'incoming' | 'outgoing' } }) => (
     <View style={styles.pendingItem}>
-      <Image source={{ uri: item.sender.avatar }} style={styles.pendingAvatar} />
+      <Image source={{ uri: item.user.avatar }} style={styles.pendingAvatar} />
       <View style={styles.pendingInfo}>
-        <Text style={styles.pendingName}>{item.sender.name}</Text>
-        <Text style={styles.pendingDept}>{item.sender.department}</Text>
+        <Text style={styles.pendingName}>{item.user.name}</Text>
+        <Text style={styles.pendingDept}>{item.user.department}</Text>
       </View>
-      <TouchableOpacity
-        style={styles.acceptBtn}
-        onPress={() => acceptMutation.mutate(item.request_id)}
-      >
-        <Check size={18} color={Colors.success} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.rejectBtn}
-        onPress={() => rejectMutation.mutate(item.request_id)}
-      >
-        <X size={18} color={Colors.textMuted} />
-      </TouchableOpacity>
+      {item.type === 'incoming' ? (
+        <>
+          <TouchableOpacity
+            style={styles.acceptBtn}
+            onPress={() => acceptMutation.mutate(item.request_id)}
+          >
+            <Check size={18} color={Colors.success} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.rejectBtn}
+            onPress={() => rejectMutation.mutate(item.request_id)}
+          >
+            <X size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={styles.sentLabel}>
+          <Text style={styles.sentLabelText}>Sent</Text>
+        </View>
+      )}
     </View>
   ), [acceptMutation, rejectMutation]);
+
+
+  const renderBlocked = useCallback(({ item }: { item: User }) => (
+    <View style={styles.threadItem}>
+      <Image source={{ uri: item.avatar }} style={styles.threadAvatar} />
+      <View style={styles.threadContent}>
+        <Text style={styles.threadName}>{item.name}</Text>
+        <Text style={styles.threadTime}>Blocked</Text>
+      </View>
+      <TouchableOpacity
+        style={styles.unblockBtn}
+        onPress={() => unblockMutation.mutate(item.id)}
+      >
+        <Text style={styles.unblockBtnText}>Unblock</Text>
+      </TouchableOpacity>
+    </View>
+  ), [unblockMutation]);
+
 
   return (
     <View style={styles.container}>
@@ -100,7 +159,7 @@ export default function ConnectionsScreen() {
           data={connections}
           renderItem={renderThread}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, connections.length === 0 && { flexGrow: 1 }]}
           refreshing={isLoadingConnections}
           onRefresh={refetchConnections}
           ListEmptyComponent={
@@ -111,25 +170,57 @@ export default function ConnectionsScreen() {
         />
       )}
       {tab === 'pending' && (
+        <>
+          <View style={styles.subTabRow}>
+            <TouchableOpacity 
+              style={[styles.subTab, pendingSubTab === 'received' && styles.subTabActive]}
+              onPress={() => setPendingSubTab('received')}
+            >
+              <Text style={[styles.subTabText, pendingSubTab === 'received' && styles.subTabTextActive]}>Received</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.subTab, pendingSubTab === 'sent' && styles.subTabActive]}
+              onPress={() => setPendingSubTab('sent')}
+            >
+              <Text style={[styles.subTabText, pendingSubTab === 'sent' && styles.subTabTextActive]}>Sent</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={pendingSubTab === 'received' ? incomingRequests : outgoingRequests}
+            renderItem={renderPendingItem}
+            keyExtractor={(item) => item.request_id}
+            contentContainerStyle={[styles.list, (pendingSubTab === 'received' ? incomingRequests.length : outgoingRequests.length) === 0 && { flexGrow: 1 }]}
+            refreshing={pendingSubTab === 'received' ? isLoadingIncoming : isLoadingOutgoing}
+            onRefresh={pendingSubTab === 'received' ? refetchIncoming : refetchOutgoing}
+
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>
+                  {pendingSubTab === 'received' ? 'No pending requests received' : 'No requests sent yet'}
+                </Text>
+              </View>
+            }
+          />
+        </>
+      )}
+
+      {tab === 'blocked' && (
         <FlatList
-          data={requests}
-          renderItem={renderPending}
-          keyExtractor={(item) => item.request_id}
-          contentContainerStyle={styles.list}
-          refreshing={isLoadingRequests}
-          onRefresh={refetchRequests}
+          data={blockedUsers}
+          renderItem={renderBlocked}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[styles.list, blockedUsers.length === 0 && { flexGrow: 1 }]}
+          refreshing={isLoadingBlocked}
+          onRefresh={refetchBlocked}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No pending requests</Text>
+              <Text style={styles.emptyText}>No blocked connections</Text>
             </View>
           }
         />
       )}
-      {tab === 'blocked' && (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No blocked connections</Text>
-        </View>
-      )}
+
+
     </View>
   );
 }
@@ -263,7 +354,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: spacing.sm,
   },
+  subTabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  subTab: {
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  subTabActive: {
+    borderBottomColor: Colors.primaryDark,
+  },
+  subTabText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: Colors.textMuted,
+  },
+  subTabTextActive: {
+    color: Colors.primaryDark,
+    fontWeight: fontWeight.bold,
+  },
+  sentLabel: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: Colors.borderLight,
+    borderRadius: borderRadius.sm,
+  },
+  sentLabelText: {
+    fontSize: fontSize.xs,
+    color: Colors.textMuted,
+    fontWeight: fontWeight.medium,
+  },
   emptyState: {
+
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -272,4 +398,17 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: Colors.textMuted,
   },
+  unblockBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  unblockBtnText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: Colors.primaryDark,
+  },
 });
+

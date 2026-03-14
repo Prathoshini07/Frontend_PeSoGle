@@ -68,7 +68,16 @@ export default function PostDetailScreen() {
 
     const renderComment = (item: Comment) => (
         <View key={item.comment_id} style={styles.replyCard}>
-            <Text style={styles.replyMeta}>User {item.author_id.substring(0, 8)} • {new Date(item.created_at).toLocaleDateString()}</Text>
+            <View style={styles.replyHeader}>
+                <Image 
+                    source={{ uri: item.author_avatar || `https://ui-avatars.com/api/?name=${item.author_name || 'U'}&background=random` }} 
+                    style={styles.replyAvatar} 
+                />
+                <View>
+                    <Text style={styles.replyAuthor}>{item.author_name || `User ${item.author_id.substring(0, 8)}`}</Text>
+                    <Text style={styles.replyMeta}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                </View>
+            </View>
             <Text style={styles.replyContent}>{item.content}</Text>
         </View>
     );
@@ -76,7 +85,16 @@ export default function PostDetailScreen() {
     const renderAnswer = (item: Answer) => (
         <View key={item.answer_id} style={[styles.replyCard, item.is_accepted && styles.acceptedAnswer]}>
             <View style={styles.answerHeaderRow}>
-                <Text style={styles.replyMeta}>User {item.author_id.substring(0, 8)} • {new Date(item.created_at).toLocaleDateString()}</Text>
+                <View style={styles.replyHeader}>
+                    <Image 
+                        source={{ uri: item.author_avatar || `https://ui-avatars.com/api/?name=${item.author_name || 'U'}&background=random` }} 
+                        style={styles.replyAvatar} 
+                    />
+                    <View>
+                        <Text style={styles.replyAuthor}>{item.author_name || `User ${item.author_id.substring(0, 8)}`}</Text>
+                        <Text style={styles.replyMeta}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                    </View>
+                </View>
                 <View style={styles.upvoteRow}>
                     <ArrowUp size={14} color={Colors.textSecondary} />
                     <Text style={styles.replyMeta}>{item.upvote_count}</Text>
@@ -86,6 +104,7 @@ export default function PostDetailScreen() {
             {item.is_accepted && <Text style={styles.acceptedLabel}>✓ Accepted Answer</Text>}
         </View>
     );
+
 
     if (loading || !post) {
         return (
@@ -173,7 +192,25 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.borderLight,
     },
+    replyHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing.sm,
+        gap: spacing.sm,
+    },
+    replyAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: Colors.borderLight,
+    },
+    replyAuthor: {
+        fontSize: fontSize.sm,
+        fontWeight: fontWeight.bold,
+        color: Colors.primaryDark,
+    },
     acceptedAnswer: {
+
         borderColor: Colors.success,
         borderWidth: 2,
     },

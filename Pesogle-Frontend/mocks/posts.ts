@@ -29,7 +29,9 @@ export const categories = [
   'Career Guidance',
   'Project Help',
   'Study Resources',
+  'Other',
 ];
+
 
 export const mockPosts: Post[] = [
   {
