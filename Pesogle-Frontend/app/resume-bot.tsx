@@ -1,25 +1,65 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { Upload, FileText, AlertTriangle, CheckCircle, Lightbulb, ChevronRight } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
-
-const mockExtractedSkills = ['Python', 'TensorFlow', 'React Native', 'SQL', 'Git'];
-const mockMissingSkills = ['Docker', 'Kubernetes', 'System Design', 'MLOps'];
-const mockSuggestions = [
-  'Add quantifiable achievements to your project descriptions',
-  'Include a dedicated "Research" section for your NLP work',
-  'List relevant coursework in ML and Data Science',
-  'Add links to your GitHub repositories and published papers',
-];
+import apiClient from '@/services/api';
 
 export default function ResumeBotScreen() {
-  const [uploaded, setUploaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [analysis, setAnalysis] = useState<any>(null);
 
-  const handleUpload = useCallback(() => {
-    setUploaded(true);
+  const handleUpload = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      setLoading(true);
+      const file = result.assets[0];
+
+      // Create form data for upload
+      const formData = new FormData();
+      
+      if (Platform.OS === 'web') {
+        // On Web, we need to convert the URI to a Blob
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        formData.append('file', blob, file.name);
+      } else {
+        // On Mobile, use the object format compatible with axios/FormData
+        // @ts-ignore
+        formData.append('file', {
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType || 'application/octet-stream',
+        });
+      }
+
+      const response = await apiClient.post(`/resume-bot/analyze`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      console.log('Analysis response:', response.data);
+      setAnalysis(response.data);
+    } catch (error: any) {
+      console.error('Upload error details:', error.response?.data || error.message);
+      Alert.alert('Upload Failed', `Error: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  const reset = () => {
+    setAnalysis(null);
+  };
 
   return (
     <View style={styles.container}>
@@ -32,17 +72,29 @@ export default function ResumeBotScreen() {
         }}
       />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {!uploaded ? (
+        {!analysis ? (
           <View style={styles.uploadArea}>
             <View style={styles.uploadIcon}>
-              <Upload size={40} color={Colors.primaryDark} />
+              {loading ? (
+                 <ActivityIndicator size="large" color={Colors.primaryDark} />
+              ) : (
+                <Upload size={40} color={Colors.primaryDark} />
+              )}
             </View>
-            <Text style={styles.uploadTitle}>Upload Your Resume</Text>
-            <Text style={styles.uploadSubtitle}>Our AI will analyze your resume and provide personalized improvement suggestions</Text>
-            <TouchableOpacity style={styles.uploadBtn} onPress={handleUpload}>
-              <FileText size={20} color={Colors.white} />
-              <Text style={styles.uploadBtnText}>Choose File</Text>
-            </TouchableOpacity>
+            <Text style={styles.uploadTitle}>{loading ? 'Analyzing...' : 'Upload Your Resume'}</Text>
+            <Text style={styles.uploadSubtitle}>
+              {loading 
+                ? 'Please wait while our AI scans your resume for skills and opportunities.' 
+                : 'Our AI will analyze your resume and provide personalized improvement suggestions'}
+            </Text>
+            
+            {!loading && (
+              <TouchableOpacity style={styles.uploadBtn} onPress={handleUpload}>
+                <FileText size={20} color={Colors.white} />
+                <Text style={styles.uploadBtnText}>Choose File</Text>
+              </TouchableOpacity>
+            )}
+            
             <Text style={styles.uploadHint}>Supports PDF, DOCX (Max 5MB)</Text>
           </View>
         ) : (
@@ -50,10 +102,10 @@ export default function ResumeBotScreen() {
             <View style={styles.scoreCard}>
               <Text style={styles.scoreLabel}>Resume Score</Text>
               <View style={styles.scoreCircle}>
-                <Text style={styles.scoreValue}>72</Text>
+                <Text style={styles.scoreValue}>{analysis.score}</Text>
                 <Text style={styles.scoreMax}>/100</Text>
               </View>
-              <Text style={styles.scoreMessage}>Good foundation, but there's room for improvement</Text>
+              <Text style={styles.scoreMessage}>{analysis.score_message}</Text>
             </View>
 
             <View style={styles.sectionCard}>
@@ -62,11 +114,14 @@ export default function ResumeBotScreen() {
                 <Text style={styles.sectionTitle}>Detected Skills</Text>
               </View>
               <View style={styles.skillsWrap}>
-                {mockExtractedSkills.map(skill => (
+                {analysis.detected_skills?.map((skill: string) => (
                   <View key={skill} style={styles.skillTag}>
                     <Text style={styles.skillTagText}>{skill}</Text>
                   </View>
                 ))}
+                {(!analysis.detected_skills || analysis.detected_skills.length === 0) && (
+                  <Text style={styles.emptyText}>No skills detected</Text>
+                )}
               </View>
             </View>
 
@@ -75,13 +130,16 @@ export default function ResumeBotScreen() {
                 <AlertTriangle size={18} color={Colors.warning} />
                 <Text style={styles.sectionTitle}>Missing Skills</Text>
               </View>
-              <Text style={styles.sectionSubtitle}>Based on your target role: ML Engineer</Text>
+              <Text style={styles.sectionSubtitle}>Recommended for your profile</Text>
               <View style={styles.skillsWrap}>
-                {mockMissingSkills.map(skill => (
+                {analysis.missing_skills?.map((skill: string) => (
                   <View key={skill} style={styles.missingTag}>
                     <Text style={styles.missingTagText}>{skill}</Text>
                   </View>
                 ))}
+                {(!analysis.missing_skills || analysis.missing_skills.length === 0) && (
+                  <Text style={styles.emptyText}>Looking good! No critical missing skills found.</Text>
+                )}
               </View>
             </View>
 
@@ -90,7 +148,7 @@ export default function ResumeBotScreen() {
                 <Lightbulb size={18} color={Colors.primaryDark} />
                 <Text style={styles.sectionTitle}>Improvement Tips</Text>
               </View>
-              {mockSuggestions.map((suggestion, index) => (
+              {analysis.improvement_tips?.map((suggestion: string, index: number) => (
                 <View key={index} style={styles.suggestionItem}>
                   <View style={styles.suggestionNumber}>
                     <Text style={styles.suggestionNumberText}>{index + 1}</Text>
@@ -98,9 +156,12 @@ export default function ResumeBotScreen() {
                   <Text style={styles.suggestionText}>{suggestion}</Text>
                 </View>
               ))}
+              {(!analysis.improvement_tips || analysis.improvement_tips.length === 0) && (
+                <Text style={styles.emptyText}>No specific tips at this time.</Text>
+              )}
             </View>
 
-            <TouchableOpacity style={styles.reuploadBtn} onPress={() => setUploaded(false)}>
+            <TouchableOpacity style={styles.reuploadBtn} onPress={reset}>
               <Upload size={16} color={Colors.accent} />
               <Text style={styles.reuploadText}>Upload Different Resume</Text>
             </TouchableOpacity>
@@ -291,5 +352,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: Colors.accent,
     fontWeight: fontWeight.semibold,
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
   },
 });
