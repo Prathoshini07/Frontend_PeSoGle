@@ -1,10 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
-import { Image } from 'expo-image';
 import { Bell, Search } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { shadow, spacing } from '@/constants/theme';
-import { currentUser } from '@/mocks/users';
 
 export default function AppHeader() {
     return (
@@ -12,11 +10,7 @@ export default function AppHeader() {
             <View style={styles.container}>
                 <View style={styles.leftSection}>
                     <TouchableOpacity style={styles.profileBtn}>
-                        <Image
-                            source={{ uri: currentUser.avatar }}
-                            style={styles.avatar}
-                            contentFit="cover"
-                        />
+                        <View style={styles.avatar} />
                     </TouchableOpacity>
                 </View>
 
