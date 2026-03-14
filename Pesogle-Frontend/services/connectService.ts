@@ -1,4 +1,6 @@
 import apiClient, { type ApiResponse } from './api';
+import { profileService } from './profileService';
+import type { User } from '@/mocks/users';
 
 export interface ConnectRequest {
     request_id: string;
@@ -97,5 +99,83 @@ export const connectService = {
     getStatus: async (otherUserId: string): Promise<ApiResponse<ConnectionStatus>> => {
         const response = await apiClient.get(`/connect/status/${otherUserId}`);
         return { data: response.data, success: true };
+    },
+
+    // Rich Data (with Profiles)
+    getConnectionsWithProfiles: async (): Promise<ApiResponse<User[]>> => {
+        try {
+            const response = await connectService.getConnections();
+            const connections = response.data;
+
+            const users = await Promise.all(
+                connections.map(async (conn) => {
+                    try {
+                        const profile = await profileService.getProfileById(conn.connected_user_id);
+                        return {
+                            id: profile.user_id,
+                            name: profile.personal_info.full_name,
+                            email: profile.email,
+                            department: profile.personal_info.institution,
+                            year: `${profile.personal_info.academic_batch} Batch`,
+                            domains: profile.personal_info.branch_or_domain,
+                            skills: profile.skills_and_interests.skills,
+                            projects: profile.projects.map((p: any) => p.title),
+                            goals: profile.skills_and_interests.interests,
+                            bio: profile.projects[0]?.description || 'Established connection',
+                            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.personal_info.full_name)}&background=random`,
+                            matchPercentage: 0,
+                            matchReason: 'Established Connection',
+                            academicScore: 0,
+                            role: 'student', // Default or fetch if needed
+                        } as User;
+                    } catch (e) {
+                        return null;
+                    }
+                })
+            );
+
+            return { data: users.filter((u): u is User => u !== null), success: true };
+        } catch (error) {
+            return { data: [], success: false, message: 'Failed to fetch connections' };
+        }
+    },
+
+    getIncomingRequestsWithProfiles: async (): Promise<ApiResponse<(ConnectRequest & { sender: User })[]>> => {
+        try {
+            const response = await connectService.getIncomingRequests();
+            const requests = response.data;
+
+            const richRequests = await Promise.all(
+                requests.map(async (req) => {
+                    try {
+                        const profile = await profileService.getProfileById(req.sender_id);
+                        const sender: User = {
+                            id: profile.user_id,
+                            name: profile.personal_info.full_name,
+                            email: profile.email,
+                            department: profile.personal_info.institution,
+                            year: `${profile.personal_info.academic_batch} Batch`,
+                            domains: profile.personal_info.branch_or_domain,
+                            skills: profile.skills_and_interests.skills,
+                            projects: profile.projects.map((p: any) => p.title),
+                            goals: profile.skills_and_interests.interests,
+                            bio: profile.projects[0]?.description || 'Connection Request',
+                            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.personal_info.full_name)}&background=random`,
+                            matchPercentage: 0,
+                            matchReason: 'Connection Request',
+                            academicScore: 0,
+                            role: 'student',
+                        };
+                        return { ...req, sender };
+                    } catch (e) {
+                        return null;
+                    }
+                })
+            );
+
+            return { data: richRequests.filter((r): r is (ConnectRequest & { sender: User }) => r !== null), success: true };
+        } catch (error) {
+            return { data: [], success: false, message: 'Failed to fetch requests' };
+        }
     },
 };

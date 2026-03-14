@@ -1,4 +1,4 @@
-import apiClient from './api';
+import apiClient, { type ApiResponse } from './api';
 
 export type Degree = 'B.Tech' | 'M.Sc' | 'M.Tech' | 'PhD';
 
@@ -48,16 +48,15 @@ export const profileService = {
     return response.data;
   },
 
-  getProfileById: async (userId: string): Promise<User> => {
+  getProfileById: async (userId: string): Promise<ProfileResponse> => {
     console.log('[ProfileService] Fetching profile by ID:', userId);
-    // Profile service doesn't wrap in ApiResponse
-    const response = await apiClient.get(`/profile/${userId}`);
+    const response = await apiClient.get<ProfileResponse>(`/profile/api/v1/profile/${userId}`);
     return response.data;
   },
 
-  createProfile: async (data: ProfileCreateRequest): Promise<ApiResponse<User>> => {
-    console.log('[ProfileService] Creating profile:', data.name);
-    const response = await apiClient.post('/profile/', data);
+  createProfile: async (data: ProfileCreateRequest): Promise<ProfileResponse> => {
+    console.log('[ProfileService] Creating profile');
+    const response = await apiClient.post<ProfileResponse>('/profile/api/v1/profile/', data);
     return response.data;
   },
 

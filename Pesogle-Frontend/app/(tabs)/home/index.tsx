@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Stack } from 'expo-router';
-import { Bell, ChevronRight, TrendingUp, Sparkles, BookOpen } from 'lucide-react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
+import { useRouter, Stack } from 'expo-router';
+import { Bell, ChevronRight, TrendingUp, Sparkles, BookOpen, LogOut } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import UserCard from '@/components/UserCard';
@@ -15,7 +14,18 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { email } = useAuth();
+  const { email, logout } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: logout },
+      ]
+    );
+  };
   const topMentors = mockUsers.filter(u => u.role === 'mentor' || u.matchPercentage >= 80).slice(0, 4);
   const [trendingPosts, setTrendingPosts] = useState<Post[]>([]);
 
@@ -43,10 +53,15 @@ export default function HomeScreen() {
         options={{
           headerTitle: '',
           headerRight: () => (
-            <TouchableOpacity style={styles.notifBtn}>
-              <Bell size={22} color={Colors.primaryDark} />
-              <View style={styles.notifDot} />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.notifBtn}>
+                <Bell size={22} color={Colors.primaryDark} />
+                <View style={styles.notifDot} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                <LogOut size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -183,6 +198,11 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: Colors.primaryDark,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   notifBtn: {
     width: 40,
     height: 40,
@@ -200,6 +220,15 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: Colors.accent,
+  },
+  logoutBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.sm,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,

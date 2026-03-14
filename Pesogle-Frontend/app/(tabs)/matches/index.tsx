@@ -1,82 +1,93 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Modal } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Filter, X, Search, Sparkles } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import UserCard from '@/components/UserCard';
 import EmptyState from '@/components/EmptyState';
 import TagChip from '@/components/TagChip';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { matchService, type User } from '@/services/matchService';
+import { connectService } from '@/services/connectService';
 
 const roleFilters = ['All', 'Student', 'Mentor', 'Researcher'];
 const domainFilters = ['All', 'AI & ML', 'Web Dev', 'Security', 'Data Science', 'IoT'];
 
 export default function MatchesScreen() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [showFilters, setShowFilters] = useState(false);
   const [roleFilter, setRoleFilter] = useState('All');
   const [domainFilter, setDomainFilter] = useState('All');
-
-  const [matches, setMatches] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   
+  // Perfect Match State
   const [showPerfectMatchModal, setShowPerfectMatchModal] = useState(false);
   const [perfectMatchPurpose, setPerfectMatchPurpose] = useState('');
   const [isPerfectMatchMode, setIsPerfectMatchMode] = useState(false);
+  const [perfectMatches, setPerfectMatches] = useState<User[]>([]);
+  const [isPerfectMatchLoading, setIsPerfectMatchLoading] = useState(false);
 
-  const loadMatches = useCallback(async () => {
-    setIsLoading(true);
-    setIsPerfectMatchMode(false);
-    const result = await matchService.getMatches({
+  // Main Recommendations Query
+  const { data: recommendationsRes, isLoading: isRecsLoading, isError: isRecsError, refetch: refetchRecs } = useQuery({
+    queryKey: ['matches', roleFilter, domainFilter],
+    queryFn: () => matchService.getMatches({
       role: roleFilter !== 'All' ? roleFilter : undefined,
       domain: domainFilter !== 'All' ? domainFilter : undefined,
-    });
-    if (result.success && result.data) {
-      setMatches(result.data);
-    } else {
-      Alert.alert('Error', result.message || 'Failed to load recommendations');
-      setMatches([]);
-    }
-    setIsLoading(false);
-  }, [roleFilter, domainFilter]);
+    }),
+    enabled: !isPerfectMatchMode,
+  });
 
-  useEffect(() => {
-    loadMatches();
-  }, [loadMatches]);
+  const matches = isPerfectMatchMode ? perfectMatches : (recommendationsRes?.data || []);
 
   const handleConnect = useCallback(async (user: User) => {
-    const res = await matchService.connectUser(user.id);
-    if (res.success) {
-      Alert.alert('Connection Sent', `Request sent to ${user.name}`);
-    } else {
-      Alert.alert('Error', res.message || 'Failed to send request');
+    try {
+      const response = await connectService.sendRequest(user.id);
+      if (response.success) {
+        Alert.alert('Connection Sent', `Request sent to ${user.name}`);
+      } else {
+        Alert.alert('Error', response.message || 'Failed to send connection request');
+      }
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        Alert.alert('Note', 'A connection request has already been sent to this user or you are already connected.');
+      } else {
+        Alert.alert('Error', 'An unexpected error occurred');
+      }
     }
   }, []);
 
   const handlePerfectMatchSubmit = async () => {
     if (!perfectMatchPurpose.trim()) return;
     setShowPerfectMatchModal(false);
-    setIsLoading(true);
+    setIsPerfectMatchLoading(true);
     setIsPerfectMatchMode(true);
-    const result = await matchService.getPerfectMatches(perfectMatchPurpose);
-    if (result.success && result.data) {
-      setMatches(result.data);
-    } else {
-      Alert.alert('Notice', result.message || 'Could not find perfect matches.');
-      setMatches([]);
+    
+    try {
+      const result = await matchService.getPerfectMatches(perfectMatchPurpose);
+      if (result.success && result.data) {
+        setPerfectMatches(result.data);
+      } else {
+        Alert.alert('Notice', result.message || 'Could not find perfect matches.');
+        setPerfectMatches([]);
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to fetch perfect matches');
+    } finally {
+      setIsPerfectMatchLoading(false);
     }
-    setIsLoading(false);
   };
 
   const renderUser = useCallback(({ item }: { item: User }) => (
     <UserCard
       user={item}
-      onPress={() => router.push(`/user/${item.id}`)}
+      onPress={() => router.push(`/user/${item.id}` as any)}
       onConnect={() => handleConnect(item)}
     />
-  ), [handleConnect]);
+  ), [handleConnect, router]);
 
   const hasActiveFilters = roleFilter !== 'All' || domainFilter !== 'All';
+  const isLoading = isRecsLoading || isPerfectMatchLoading;
 
   return (
     <View style={styles.container}>
@@ -87,6 +98,7 @@ export default function MatchesScreen() {
             <TouchableOpacity
               style={[styles.filterBtn, showFilters && styles.filterBtnActive]}
               onPress={() => setShowFilters(!showFilters)}
+              disabled={isPerfectMatchMode}
             >
               <Filter size={18} color={showFilters ? Colors.white : Colors.primaryDark} />
               {hasActiveFilters && !showFilters && <View style={styles.filterDot} />}
@@ -144,11 +156,11 @@ export default function MatchesScreen() {
           )}
         </View>
       )}
-      
+
       {isLoading ? (
-        <View style={[styles.list, { alignItems: 'center', justifyContent: 'center', flex: 1 }]}>
+        <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={Colors.primaryDark} />
-          <Text style={{ marginTop: spacing.md, color: Colors.textMuted }}>
+          <Text style={styles.loadingText}>
             {isPerfectMatchMode ? 'Analyzing intent...' : 'Finding best matches...'}
           </Text>
         </View>
@@ -159,6 +171,8 @@ export default function MatchesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshing={!isPerfectMatchMode && isRecsLoading}
+          onRefresh={!isPerfectMatchMode ? refetchRecs : undefined}
           ListEmptyComponent={
             <EmptyState
               title={isPerfectMatchMode ? "No Perfect Match Found" : "No Matches Found"}
@@ -171,7 +185,7 @@ export default function MatchesScreen() {
                 {isPerfectMatchMode ? `Perfect Matches: ${matches.length}` : `${matches.length} matches found`}
               </Text>
               {isPerfectMatchMode && (
-                <TouchableOpacity onPress={loadMatches}>
+                <TouchableOpacity onPress={() => setIsPerfectMatchMode(false)}>
                   <Text style={styles.clearPerfectMatchText}>Clear</Text>
                 </TouchableOpacity>
               )}
@@ -194,7 +208,7 @@ export default function MatchesScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Find a Perfect Match</Text>
               <TouchableOpacity onPress={() => setShowPerfectMatchModal(false)}>
-                <X size={24} color={Colors.textPrimary} />
+                <X size={24} color={Colors.primaryDark} />
               </TouchableOpacity>
             </View>
             <Text style={styles.modalDescription}>
@@ -334,8 +348,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   modalTitle: {
-    fontFamily: 'Norwester',
     fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
     color: Colors.primaryDark,
   },
   modalDescription: {
@@ -347,7 +361,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryBg,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    color: Colors.textPrimary,
+    color: Colors.primaryDark,
     fontSize: fontSize.md,
     height: 100,
     textAlignVertical: 'top',
@@ -368,5 +382,17 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: fontWeight.bold,
     fontSize: fontSize.md,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxxl,
+  },
+  loadingText: {
+    fontSize: fontSize.md,
+    color: Colors.textSecondary,
+    fontWeight: fontWeight.medium,
+    marginTop: spacing.md,
   },
 });

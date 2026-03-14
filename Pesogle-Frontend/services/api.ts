@@ -22,6 +22,12 @@ const API_BASE_URL = getBaseUrl();
 console.log('[API] Using Base URL:', API_BASE_URL);
 const AUTH_STORAGE_KEY = 'pesogle_auth';
 
+// Callback registry to allow AuthContext to trigger logout from here
+let onAuthError: () => void = () => { };
+export const registerAuthErrorHandler = (handler: () => void) => {
+  onAuthError = handler;
+};
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
@@ -65,20 +71,6 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     console.log('[API] Response error:', error?.response?.status, error?.message);
-    if (error?.response?.status === 401) {
-      console.log('[API] Unauthorized. Purging auth and redirecting to login.');
-      try {
-        await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-      } catch (e) {
-        // ignore storage clear errors
-      }
-      try {
-        // Handle global redirect
-        router.replace('/(auth)/login');
-      } catch (e) {
-        console.warn('[API] Router navigate failed. Possibly rendering context issue:', e);
-      }
-    }
     return Promise.reject(error);
   }
 );
