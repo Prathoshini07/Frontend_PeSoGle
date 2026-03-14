@@ -24,11 +24,26 @@ export default function DiscussionsScreen() {
       const loadPosts = async () => {
         setLoading(true);
         try {
-          const response = await postService.getPosts(selectedCategory, selectedType);
+          // Map frontend category labels to backend values
+          const categoryMap: Record<string, string> = {
+            'AI & ML': 'AI_ML',
+            'Web Development': 'WEB_DEV',
+            'Core Engineering': 'SYSTEMS',
+            'Research': 'RESEARCH',
+            'Career Guidance': 'PLACEMENTS',
+            'Project Help': 'PROJECTS',
+            'Study Resources': 'GENERAL',
+            'Other': 'OTHER'
+          };
+          
+          const finalCategory = categoryMap[selectedCategory] || selectedCategory;
+          const response = await postService.getPosts(finalCategory, selectedType);
+          
           if (response.success && isActive) {
             setPosts(response.data);
           }
         } catch (error) {
+
           console.log('[Discussions] Failed to load posts:', error);
         } finally {
           if (isActive) setLoading(false);
@@ -80,8 +95,9 @@ export default function DiscussionsScreen() {
                     onPress={() => setSelectedType(type)}
                   >
                     <Text style={[styles.typeText, selectedType === type && styles.typeTextActive]}>
-                      {type === 'BLOG' ? 'Blogs' : type === 'QUESTION' ? 'Q&A' : type === 'POST' ? 'Discussions' : 'All Types'}
+                      {type === 'BLOG' ? 'Blogs' : type === 'QUESTION' ? 'Q&A' : type === 'POST' ? 'Posts' : 'All Types'}
                     </Text>
+
                   </TouchableOpacity>
                 ))}
               </ScrollView>

@@ -18,15 +18,17 @@ export default function ComposePostScreen() {
     const [tagsString, setTagsString] = useState('');
     const [selectedType, setSelectedType] = useState('POST');
     const [selectedCategory, setSelectedCategory] = useState(categories[1] || 'General'); // Default to first proper category
+    const [customCategory, setCustomCategory] = useState('');
 
     const [mediaUri, setMediaUri] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const postTypes = [
-        { id: 'POST', label: 'Discussion' },
+        { id: 'POST', label: 'Post' },
         { id: 'BLOG', label: 'Blog' },
         { id: 'QUESTION', label: 'Question' }
     ];
+
 
     // Map frontend display labels to strict backend enum values
     const categoryMap: Record<string, string> = {
@@ -34,6 +36,14 @@ export default function ComposePostScreen() {
         'Career': 'PLACEMENTS',
         'Campus Life': 'GENERAL',
         'Alumni': 'GENERAL',
+        'AI & ML': 'AI_ML',
+        'Web Development': 'WEB_DEV',
+        'Core Engineering': 'SYSTEMS',
+        'Research': 'RESEARCH',
+        'Career Guidance': 'PLACEMENTS',
+        'Project Help': 'PROJECTS',
+        'Study Resources': 'GENERAL',
+        'GENERAL': 'GENERAL',
         'AI_ML': 'AI_ML',
         'DSA': 'DSA',
         'WEB_DEV': 'WEB_DEV',
@@ -42,9 +52,7 @@ export default function ComposePostScreen() {
         'DATA_SCIENCE': 'DATA_SCIENCE',
         'CYBER_SECURITY': 'CYBER_SECURITY',
         'PLACEMENTS': 'PLACEMENTS',
-        'RESEARCH': 'RESEARCH',
-        'PROJECTS': 'PROJECTS',
-        'GENERAL': 'GENERAL'
+        'PROJECTS': 'PROJECTS'
     };
 
     const pickImage = async () => {
@@ -72,10 +80,20 @@ export default function ComposePostScreen() {
             return;
         }
 
+        if (selectedCategory === 'Other' && !customCategory.trim()) {
+            Alert.alert('Missing Category', 'Please specify your custom category.');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            // Resolve category to backend ENUM
-            const finalCategory = categoryMap[selectedCategory] || 'GENERAL';
+            // Resolve category to backend ENUM or use custom string
+            let finalCategory = '';
+            if (selectedCategory === 'Other') {
+                finalCategory = customCategory.trim();
+            } else {
+                finalCategory = categoryMap[selectedCategory] || selectedCategory.toUpperCase().replace(/\s+/g, '_');
+            }
 
             const data: CreatePostData = {
                 type: selectedType,
@@ -166,7 +184,19 @@ export default function ComposePostScreen() {
                     ))}
                 </ScrollView>
 
+                {selectedCategory === 'Other' && (
+                    <TextInput
+                        style={styles.inputCustomCategory}
+                        placeholder="Enter your custom category"
+                        placeholderTextColor={Colors.textMuted}
+                        value={customCategory}
+                        onChangeText={setCustomCategory}
+                        maxLength={30}
+                    />
+                )}
+
                 <View style={styles.divider} />
+
 
                 {/* Title & Content */}
                 <TextInput
@@ -297,7 +327,16 @@ const styles = StyleSheet.create({
         color: Colors.white,
         fontWeight: fontWeight.bold,
     },
+    inputCustomCategory: {
+        marginTop: spacing.md,
+        fontSize: fontSize.sm,
+        color: Colors.textPrimary,
+        paddingVertical: spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.accent,
+    },
     divider: {
+
         height: 1,
         backgroundColor: Colors.borderLight,
         marginVertical: spacing.lg,

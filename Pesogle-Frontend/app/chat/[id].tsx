@@ -1,16 +1,21 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { Send, Lock } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Send, Lock, MoreVertical } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { borderRadius, fontSize, fontWeight, spacing } from '@/constants/theme';
+import { borderRadius, fontSize, fontWeight, spacing, shadow } from '@/constants/theme';
 import { mockMessages, type ChatMessage } from '@/services/chatService';
+import { connectService } from '@/services/connectService';
+
 
 export default function ChatScreen() {
+  const router = useRouter();
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
   const [inputText, setInputText] = useState('');
+  const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
 
   const handleSend = useCallback(() => {
     if (!inputText.trim()) return;
@@ -38,6 +43,38 @@ export default function ChatScreen() {
     );
   }, []);
 
+  const handleBlock = useCallback(() => {
+    const blockUser = async () => {
+      try {
+        const res = await connectService.blockUser(id);
+        if (res.success) {
+          if (Platform.OS === 'web') alert('User has been blocked.');
+          else Alert.alert('Success', 'User has been blocked.');
+          router.back();
+        }
+      } catch (error) {
+        if (Platform.OS === 'web') alert('Failed to block user.');
+        else Alert.alert('Error', 'Failed to block user.');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Are you sure you want to block ${name}?`)) {
+        blockUser();
+      }
+    } else {
+      Alert.alert(
+        'Block User',
+        `Are you sure you want to block ${name}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Block', style: 'destructive', onPress: blockUser },
+        ]
+      );
+    }
+  }, [id, name, router]);
+
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Stack.Screen
@@ -45,8 +82,38 @@ export default function ChatScreen() {
           title: name || 'Chat',
           headerStyle: { backgroundColor: Colors.primaryDark },
           headerTintColor: Colors.white,
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginRight: spacing.sm }}>
+                <MoreVertical size={24} color={Colors.white} />
+              </TouchableOpacity>
+              
+              {showMenu && (
+                <View style={styles.menuContainer}>
+                  <TouchableOpacity 
+                    style={styles.menuItem} 
+                    onPress={() => {
+                      setShowMenu(false);
+                      handleBlock();
+                    }}
+                  >
+                    <Text style={styles.menuItemText}>Block User</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ),
         }}
       />
+      {showMenu && (
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={StyleSheet.absoluteFill} 
+          onPress={() => setShowMenu(false)}
+        />
+      )}
+
+
       <View style={styles.encryptedBanner}>
         <Lock size={12} color={Colors.textMuted} />
         <Text style={styles.encryptedText}>Messages are end-to-end encrypted</Text>
@@ -173,4 +240,38 @@ const styles = StyleSheet.create({
   sendBtnDisabled: {
     backgroundColor: Colors.borderLight,
   },
+  menuContainer: {
+    position: 'absolute',
+    top: 30,
+    right: 0,
+    backgroundColor: Colors.white,
+    borderRadius: borderRadius.md,
+    padding: spacing.xs,
+    width: 140,
+    ...Platform.select({
+      ios: shadow.md,
+      android: shadow.md,
+      web: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
+      } as any
+    }),
+
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  menuItem: {
+    padding: spacing.md,
+    borderRadius: borderRadius.sm,
+  },
+  menuItemText: {
+    color: Colors.error || '#FF4B4B',
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+  },
 });
+

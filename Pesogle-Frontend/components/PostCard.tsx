@@ -17,25 +17,29 @@ interface PostCardProps {
 
 export default function PostCard({ post, onPress, testID, isDetailed }: PostCardProps) {
   const [authorName, setAuthorName] = useState(post.authorName);
+  const [authorAvatar, setAuthorAvatar] = useState(post.authorAvatar);
 
   useEffect(() => {
     if (authorName === 'Anonymous User') {
       const fetchProfile = async () => {
         try {
           const profile: any = await profileService.getProfileById(post.authorId);
-          if (profile && profile.personal_info && profile.personal_info.full_name) {
-            setAuthorName(profile.personal_info.full_name);
-          } else if (profile && profile.name) {
-            setAuthorName(profile.name); // fallback for mock
+          if (profile) {
+            const name = profile.personal_info?.full_name || profile.name;
+            if (name) {
+              setAuthorName(name);
+              // Update avatar as well if it was the anonymous fallback
+              setAuthorAvatar(profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`);
+            }
           }
         } catch (e) {
           // Profile not found
         }
       };
-      // For Demo purposes, try to fetch anyway to get the latest DB values
       fetchProfile();
     }
   }, [post.authorId, authorName]);
+
 
   const renderIcon = () => {
     switch (post.type) {
@@ -57,12 +61,12 @@ export default function PostCard({ post, onPress, testID, isDetailed }: PostCard
       activeOpacity={0.7}
     >
       <View style={styles.header}>
-        <Image source={{ uri: post.authorAvatar }} style={styles.avatar} />
+        <Image source={{ uri: authorAvatar }} style={styles.avatar} />
         <View style={styles.authorInfo}>
           <Text style={styles.authorName}>{authorName}</Text>
-          <Text style={styles.authorId}>@{post.authorId}</Text>
           <Text style={styles.meta}>{post.authorDepartment} · {post.createdAt}</Text>
         </View>
+
         {post.hasAcceptedAnswer && (
           <View style={styles.acceptedBadge}>
             <CheckCircle size={14} color={Colors.success} />
@@ -107,8 +111,11 @@ export default function PostCard({ post, onPress, testID, isDetailed }: PostCard
         </TouchableOpacity>
         <View style={styles.stat}>
           <MessageSquare size={16} color={Colors.textSecondary} />
-          <Text style={styles.statText}>{post.answers} answers</Text>
+          <Text style={styles.statText}>
+            {post.answers} {post.type === 'QUESTION' ? 'answers' : 'comments'}
+          </Text>
         </View>
+
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryText}>{post.category}</Text>
         </View>
