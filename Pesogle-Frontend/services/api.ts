@@ -71,6 +71,25 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     console.log('[API] Response error:', error?.response?.status, error?.message);
+    if (error?.response?.status === 401) {
+      console.log('[API] Unauthorized. Purging auth and redirecting to login.');
+      try {
+        await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      } catch (e) {
+        // ignore storage clear errors
+      }
+      // Call the registered context handler to handle state & navigation
+      if (onAuthError) {
+        onAuthError();
+      } else {
+        try {
+          // Fallback global redirect if handler not bound
+          router.replace('/(auth)/login');
+        } catch (e) {
+          console.warn('[API] Router navigate failed. Possibly rendering context issue:', e);
+        }
+      }
+    }
     return Promise.reject(error);
   }
 );
