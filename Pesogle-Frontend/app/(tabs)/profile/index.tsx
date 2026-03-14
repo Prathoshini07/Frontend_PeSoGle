@@ -23,7 +23,7 @@ export default function ProfileScreen() {
 
   const loadProfile = useCallback(async () => {
     try {
-      setIsLoading(true);
+      setIsLoading(true); 
       setError(null);
       const result = await profileService.getProfile();
       setProfile(result);
@@ -34,7 +34,7 @@ export default function ProfileScreen() {
         (e as { message?: string })?.message === 'Network Error';
       setError(
         isNetworkError
-          ? "Can't reach the server. Make sure the backend is running (e.g. at http://localhost:8001)."
+          ? "Can't reach the server. Make sure the backend is running (e.g. at http://localhost:8081)."
           : 'Failed to load profile'
       );
     } finally {

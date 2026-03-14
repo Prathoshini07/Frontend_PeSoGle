@@ -44,19 +44,19 @@ export interface ProfileResponse extends ProfileCreateRequest {
 export const profileService = {
   getProfile: async (): Promise<ProfileResponse> => {
     console.log('[ProfileService] Fetching profile');
-    const response = await apiClient.get<ProfileResponse>('/profile/me');
+    const response = await apiClient.get<ProfileResponse>('/profile/api/v1/profile/me');
     return response.data;
   },
 
   createProfile: async (data: ProfileCreateRequest): Promise<ProfileResponse> => {
     console.log('[ProfileService] Creating profile:', data.personal_info.full_name);
-    const response = await apiClient.post<ProfileResponse>('/profile/', data);
+    const response = await apiClient.post<ProfileResponse>('/profile/api/v1/profile/', data);
     return response.data;
   },
 
   updateProfile: async (data: ProfileCreateRequest): Promise<ProfileResponse> => {
     console.log('[ProfileService] Updating profile');
-    const response = await apiClient.put<ProfileResponse>('/profile/me', data);
+    const response = await apiClient.put<ProfileResponse>('/profile/api/v1/profile/me', data);
     return response.data;
   },
 };

@@ -176,32 +176,39 @@ export default function ProfileCreationScreen() {
 
     try {
       setIsSubmitting(true);
+      console.log('[ProfileCreation] Submitting payload:', JSON.stringify(payload, null, 2));
+
+      const performUpdate = async () => {
+        try {
+          await profileService.updateProfile(payload);
+          completeProfile();
+          router.replace('/(tabs)/home' as any);
+        } catch (error: any) {
+          console.error('[ProfileCreation] Update failed', error);
+          const detail = error?.response?.data?.detail;
+          const errorMessage = detail ? JSON.stringify(detail) : error.message;
+          Alert.alert('Update Failed', `Could not save changes: ${errorMessage}`);
+        }
+      };
+
       if (isEditMode) {
-        await profileService.updateProfile(payload);
-        completeProfile();
-        router.replace('/(tabs)/home' as any);
+        await performUpdate();
         return;
       }
 
       try {
-        // Try creating a new profile first
         await profileService.createProfile(payload);
         completeProfile();
         router.replace('/(tabs)/home' as any);
       } catch (error: any) {
-        const status = error?.response?.status;
-        // If backend says profile already exists (409), fall back to update
-        if (status === 409) {
-          console.log('[ProfileCreation] Profile exists, updating instead of creating.');
-          await profileService.updateProfile(payload);
-          completeProfile();
-          router.replace('/(tabs)/home' as any);
+        if (error?.response?.status === 409) {
+          console.log('[ProfileCreation] Conflict 409 - profile already exists. Updating instead.');
+          await performUpdate();
         } else {
-          console.error('[ProfileCreation] Failed to create/update profile', error);
-          Alert.alert(
-            'Could not complete profile',
-            'Something went wrong while saving your profile. Please try again.'
-          );
+          console.error('[ProfileCreation] Creation failed', error);
+          const detail = error?.response?.data?.detail;
+          const errorMessage = detail ? JSON.stringify(detail) : error.message;
+          Alert.alert('Creation Failed', `Could not create profile: ${errorMessage}`);
         }
       }
     } finally {
