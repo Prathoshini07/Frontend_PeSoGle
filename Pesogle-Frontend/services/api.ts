@@ -11,10 +11,10 @@ const getBaseUrl = () => {
   const address = debuggerHost?.split(':')[0];
 
   if (address && !address.includes('localhost') && !address.includes('127.0.0.1')) {
-    return `http://${address}:8080`;
+    return `http://${address}:8081`;
   }
 
-  return 'http://localhost:8080';
+  return 'http://localhost:8081';
 };
 
 const API_BASE_URL = getBaseUrl();
