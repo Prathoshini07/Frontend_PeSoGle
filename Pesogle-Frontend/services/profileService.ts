@@ -54,21 +54,11 @@ export const profileService = {
     return response.data;
   },
 
-  createProfile: async (data: ProfileCreateRequest): Promise<ProfileResponse> => {
-    console.log('[ProfileService] Creating profile');
-    const response = await apiClient.post<ProfileResponse>('/profile/api/v1/profile/', data);
+  searchProfiles: async (query: string): Promise<{ user_id: string; full_name: string; email: string }[]> => {
+    console.log('[ProfileService] Searching profiles for:', query);
+    const response = await apiClient.get('/profile/api/v1/profile/search', {
+      params: { query }
+    });
     return response.data;
-  },
-
-  updateProfile: async (data: ProfileCreateRequest): Promise<ProfileResponse> => {
-    console.log('[ProfileService] Updating profile');
-    const response = await apiClient.put<ProfileResponse>('/profile/api/v1/profile/me', data);
-    return response.data;
-  },
-
-  getProfileById: async (userId: string): Promise<ProfileResponse> => {
-    console.log(`[ProfileService] Fetching profile for user: ${userId}`);
-    const response = await apiClient.get<ProfileResponse>(`/profile/api/v1/profile/${userId}`);
-    return response.data;
-  },
+  }
 };

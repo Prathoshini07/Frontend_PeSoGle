@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Users, CheckCircle2, Clock, CircleDot } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
-import type { Project } from '@/mocks/projects';
+import type { Project } from '@/services/projectService';
 
 interface ProjectCardProps {
   project: Project;
@@ -13,17 +13,29 @@ interface ProjectCardProps {
 }
 
 export default function ProjectCard({ project, onPress, testID }: ProjectCardProps) {
-  const statusConfig = {
-    active: { color: Colors.success, label: 'Active', icon: CircleDot },
-    completed: { color: Colors.primaryDark, label: 'Completed', icon: CheckCircle2 },
-    planning: { color: Colors.warning, label: 'Planning', icon: Clock },
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'DRAFT':
+      case 'ABSTRACT_SUBMITTED':
+      case 'ABSTRACT_APPROVED':
+        return { color: Colors.warning, label: 'Planning', icon: Clock };
+      case 'IMPLEMENTATION':
+      case 'MID_REVIEW':
+      case 'FINAL_REPORT_SUBMITTED':
+        return { color: Colors.success, label: 'Active', icon: CircleDot };
+      case 'COMPLETED':
+      case 'ARCHIVED':
+        return { color: Colors.primaryDark, label: 'Completed', icon: CheckCircle2 };
+      default:
+        return { color: Colors.textMuted, label: status || 'Unknown', icon: CircleDot };
+    }
   };
 
-  const status = statusConfig[project.status];
+  const status = getStatusConfig(project.status);
   const StatusIcon = status.icon;
-  const doneTasks = project.tasks.filter(t => t.status === 'done').length;
-  const totalTasks = project.tasks.length;
-  const progress = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
+  
+  const progressPercent = project.progress || 0;
+  const tags = [...(project.domain || []), ...(project.tech_stack || [])].slice(0, 3);
 
   return (
     <TouchableOpacity testID={testID} style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -38,7 +50,7 @@ export default function ProjectCard({ project, onPress, testID }: ProjectCardPro
         <Text style={styles.description} numberOfLines={2}>{project.description}</Text>
       </View>
       <View style={styles.tagsRow}>
-        {project.tags.map((tag) => (
+        {tags.map((tag) => (
           <View key={tag} style={styles.tag}>
             <Text style={styles.tagText}>{tag}</Text>
           </View>
@@ -47,27 +59,21 @@ export default function ProjectCard({ project, onPress, testID }: ProjectCardPro
       <View style={styles.progressSection}>
         <View style={styles.progressHeader}>
           <Text style={styles.progressLabel}>Progress</Text>
-          <Text style={styles.progressValue}>{doneTasks}/{totalTasks} tasks</Text>
+          <Text style={styles.progressValue}>{Math.round(progressPercent)}%</Text>
         </View>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
         </View>
       </View>
       <View style={styles.footer}>
         <View style={styles.membersRow}>
-          {project.members.slice(0, 3).map((member, index) => (
-            <Image
-              key={member.id}
-              source={{ uri: member.avatar }}
-              style={[styles.memberAvatar, { marginLeft: index > 0 ? -8 : 0 }]}
-            />
-          ))}
+          {/* Members fetch happens on detail screen, showing empty avatar stack for list */}
           <View style={styles.memberCount}>
             <Users size={12} color={Colors.textSecondary} />
-            <Text style={styles.memberCountText}>{project.members.length}</Text>
+            <Text style={styles.memberCountText}>Team</Text>
           </View>
         </View>
-        <Text style={styles.date}>{project.createdAt}</Text>
+        <Text style={styles.date}>{new Date(project.created_at).toLocaleDateString()}</Text>
       </View>
     </TouchableOpacity>
   );
