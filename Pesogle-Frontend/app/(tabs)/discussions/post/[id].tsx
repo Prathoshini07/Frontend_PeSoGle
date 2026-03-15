@@ -15,10 +15,22 @@ export default function PostDetailScreen() {
     const [post, setPost] = useState<Post | null>(null);
     const [loading, setLoading] = useState(true);
     const [inputContent, setInputContent] = useState('');
+    const [currentUserId, setCurrentUserId] = useState<string | undefined>();
 
     // Lists for depending on type
     const [comments, setComments] = useState<Comment[]>([]);
     const [answers, setAnswers] = useState<Answer[]>([]);
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            try {
+                const { profileService } = await import('@/services/profileService');
+                const prof = await profileService.getProfile();
+                if (prof) setCurrentUserId(prof.user_id);
+            } catch (err) { console.log('[PostDetail] Fetch user error', err); }
+        };
+        fetchUser();
+    }, []);
 
     useEffect(() => {
         if (!id) return;
@@ -66,6 +78,34 @@ export default function PostDetailScreen() {
         }
     };
 
+    const handleAcceptAnswer = async (answerId: string) => {
+        try {
+            const res = await postService.acceptAnswer(answerId);
+            if (res.success) {
+                setAnswers(prev => prev.map(a => a.answer_id === answerId ? { ...a, is_accepted: true } : a));
+                if (post) setPost({ ...post, hasAcceptedAnswer: true });
+            }
+        } catch (err) { console.log('[PostDetail] Accept answer error', err); }
+    };
+
+    const handleDeleteAnswer = async (answerId: string) => {
+        try {
+            const res = await postService.deleteAnswer(answerId);
+            if (res.success) {
+                setAnswers(prev => prev.filter(a => a.answer_id !== answerId));
+            }
+        } catch (err) { console.log('[PostDetail] Delete answer error', err); }
+    };
+
+    const handleDeleteComment = async (commentId: string) => {
+        try {
+            const res = await postService.deleteComment(commentId);
+            if (res.success) {
+                setComments(prev => prev.filter(c => c.comment_id !== commentId));
+            }
+        } catch (err) { console.log('[PostDetail] Delete comment error', err); }
+    };
+
     const renderComment = (item: Comment) => (
         <View key={item.comment_id} style={styles.replyCard}>
             <View style={styles.replyHeader}>
@@ -73,10 +113,15 @@ export default function PostDetailScreen() {
                     source={{ uri: item.author_avatar || `https://ui-avatars.com/api/?name=${item.author_name || 'U'}&background=random` }} 
                     style={styles.replyAvatar} 
                 />
-                <View>
+                <View style={{ flex: 1 }}>
                     <Text style={styles.replyAuthor}>{item.author_name || `User ${item.author_id.substring(0, 8)}`}</Text>
                     <Text style={styles.replyMeta}>{new Date(item.created_at).toLocaleDateString()}</Text>
                 </View>
+                {item.author_id === currentUserId && (
+                    <TouchableOpacity onPress={() => handleDeleteComment(item.comment_id)}>
+                        <Text style={{ color: Colors.error, fontSize: 12 }}>Delete</Text>
+                    </TouchableOpacity>
+                )}
             </View>
             <Text style={styles.replyContent}>{item.content}</Text>
         </View>
@@ -90,7 +135,7 @@ export default function PostDetailScreen() {
                         source={{ uri: item.author_avatar || `https://ui-avatars.com/api/?name=${item.author_name || 'U'}&background=random` }} 
                         style={styles.replyAvatar} 
                     />
-                    <View>
+                    <View style={{ flex: 1 }}>
                         <Text style={styles.replyAuthor}>{item.author_name || `User ${item.author_id.substring(0, 8)}`}</Text>
                         <Text style={styles.replyMeta}>{new Date(item.created_at).toLocaleDateString()}</Text>
                     </View>
@@ -102,6 +147,19 @@ export default function PostDetailScreen() {
             </View>
             <Text style={styles.replyContent}>{item.content}</Text>
             {item.is_accepted && <Text style={styles.acceptedLabel}>✓ Accepted Answer</Text>}
+            
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: spacing.sm }}>
+                {post?.authorId === currentUserId && !item.is_accepted && (
+                    <TouchableOpacity onPress={() => handleAcceptAnswer(item.answer_id)} style={styles.actionBtn}>
+                        <Text style={styles.actionText}>Accept</Text>
+                    </TouchableOpacity>
+                )}
+                {item.author_id === currentUserId && (
+                    <TouchableOpacity onPress={() => handleDeleteAnswer(item.answer_id)} style={{ marginLeft: 'auto' }}>
+                        <Text style={{ color: Colors.error, fontSize: 12 }}>Delete</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
         </View>
     );
 
@@ -266,5 +324,18 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primaryDark,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    actionBtn: {
+        backgroundColor: Colors.primaryBg,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 4,
+        borderRadius: borderRadius.sm,
+        borderWidth: 1,
+        borderColor: Colors.primaryDark,
+    },
+    actionText: {
+        fontSize: 12,
+        fontWeight: fontWeight.bold,
+        color: Colors.primaryDark,
     },
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
-import { ArrowUp, MessageSquare, CheckCircle, BookOpen, FileText, HelpCircle } from 'lucide-react-native';
+import { ArrowUp, MessageSquare, CheckCircle, BookOpen, FileText, HelpCircle, Trash2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import { profileService } from '@/services/profileService';
@@ -13,11 +13,19 @@ interface PostCardProps {
   onPress?: () => void;
   testID?: string;
   isDetailed?: boolean;
+  currentUserId?: string;
+  onDelete?: () => void;
 }
 
-export default function PostCard({ post, onPress, testID, isDetailed }: PostCardProps) {
+export default function PostCard({ post, onPress, testID, isDetailed, currentUserId, onDelete }: PostCardProps) {
   const [authorName, setAuthorName] = useState(post.authorName);
   const [authorAvatar, setAuthorAvatar] = useState(post.authorAvatar);
+  const [upvoteCount, setUpvoteCount] = useState(post.upvotes);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    setUpvoteCount(post.upvotes);
+  }, [post.upvotes]);
 
   useEffect(() => {
     if (authorName === 'Anonymous User') {
@@ -28,7 +36,6 @@ export default function PostCard({ post, onPress, testID, isDetailed }: PostCard
             const name = profile.personal_info?.full_name || profile.name;
             if (name) {
               setAuthorName(name);
-              // Update avatar as well if it was the anonymous fallback
               setAuthorAvatar(profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`);
             }
           }
@@ -53,6 +60,40 @@ export default function PostCard({ post, onPress, testID, isDetailed }: PostCard
     }
   };
 
+  const handleUpvote = async () => {
+    try {
+      const res = await postService.upvotePost(post.id);
+      if (res.success) {
+        setUpvoteCount((prev) => prev + 1);
+      }
+    } catch (e: any) {
+      if (e.response?.status === 409) {
+        try {
+          await postService.removeVote(post.id);
+          setUpvoteCount((prev) => Math.max(0, prev - 1));
+        } catch (err) {
+          console.log('[PostCard] Remove vote error', err);
+        }
+      } else {
+        console.log('[PostCard] Upvote Error', e);
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      const res = await postService.deletePost(post.id);
+      if (res.success && onDelete) {
+        onDelete();
+      }
+    } catch (err) {
+      console.log('[PostCard] Delete error', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <TouchableOpacity
       testID={testID}
@@ -72,6 +113,16 @@ export default function PostCard({ post, onPress, testID, isDetailed }: PostCard
             <CheckCircle size={14} color={Colors.success} />
             <Text style={styles.acceptedText}>Solved</Text>
           </View>
+        )}
+
+        {currentUserId === post.authorId && (
+          <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} disabled={isDeleting}>
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={Colors.error} />
+            ) : (
+              <Trash2 size={16} color={Colors.error} />
+            )}
+          </TouchableOpacity>
         )}
       </View>
       <View style={styles.titleRow}>
@@ -98,16 +149,9 @@ export default function PostCard({ post, onPress, testID, isDetailed }: PostCard
         ))}
       </View>
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.stat} onPress={async () => {
-          try {
-            await postService.upvotePost(post.id);
-            // Optimistically update the upvote count UI visually for demo effect
-            // In a real app we'd dispatch Redux/Context state 
-            alert('Upvoted!');
-          } catch (e) { console.log('Upvote Error', e) }
-        }}>
+        <TouchableOpacity style={styles.stat} onPress={handleUpvote}>
           <ArrowUp size={16} color={Colors.textSecondary} />
-          <Text style={styles.statText}>{post.upvotes}</Text>
+          <Text style={styles.statText}>{upvoteCount}</Text>
         </TouchableOpacity>
         <View style={styles.stat}>
           <MessageSquare size={16} color={Colors.textSecondary} />
@@ -248,5 +292,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: Colors.primaryDark,
     fontWeight: fontWeight.medium,
+  },
+  deleteBtn: {
+    marginLeft: 'auto',
+    padding: spacing.xs,
   },
 });
