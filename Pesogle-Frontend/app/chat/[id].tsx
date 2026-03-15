@@ -1,42 +1,98 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { Send, Lock } from 'lucide-react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Send, Lock, Info } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, spacing } from '@/constants/theme';
-import { mockMessages, type ChatMessage } from '@/services/chatService';
+import { chatService, formatTime, type ChatMessage } from '@/services/chatService';
+import { useChatWebSocket } from '@/hooks/useChatWebSocket';
+import { profileService } from '@/services/profileService';
 
 export default function ChatScreen() {
-  const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  const router = useRouter();
+  const { id: chatId, name, type, ownerId, participants, admins } = useLocalSearchParams<{ 
+    id: string; 
+    name: string; 
+    type?: string; 
+    ownerId?: string; 
+    participants?: string;
+    admins?: string;
+  }>();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
+  const [userId, setUserId] = useState<string>();
   const flatListRef = useRef<FlatList>(null);
 
-  const handleSend = useCallback(() => {
-    if (!inputText.trim()) return;
-    const newMsg: ChatMessage = {
-      id: 'm' + Date.now(),
-      senderId: 'current',
-      text: inputText.trim(),
-      timestamp: 'Just now',
-      read: false,
+  const { messages: wsMessages, sendMessage: sendWsMessage, isConnected } = useChatWebSocket(userId);
+
+  // Fetch user ID and initial messages
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const [profile, history] = await Promise.all([
+          profileService.getProfile(),
+          chatService.getMessages(chatId)
+        ]);
+        setUserId(profile.user_id);
+        if (history.success) {
+          setMessages(history.data);
+        }
+      } catch (error) {
+        console.error('[ChatScreen] Initialization failed:', error);
+      } finally {
+        setLoading(false);
+      }
     };
-    setMessages(prev => [...prev, newMsg]);
+    init();
+  }, [chatId]);
+
+  // Append incoming WebSocket messages
+  useEffect(() => {
+    const newWsMsgs = wsMessages
+      .filter(ws => ws.chat_id === chatId)
+      .map(ws => ({
+        id: ws._id,
+        senderId: ws.sender_id,
+        senderName: ws.sender_name,
+        text: ws.text,
+        timestamp: formatTime(ws.timestamp),
+        read: ws.read
+      }));
+
+    if (newWsMsgs.length > 0) {
+      setMessages(prev => {
+        // Simple de-duplication
+        const existingIds = new Set(prev.map(m => m.id));
+        const filtered = newWsMsgs.filter(m => !existingIds.has(m.id));
+        if (filtered.length === 0) return prev;
+        return [...prev, ...filtered];
+      });
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [wsMessages, chatId]);
+
+  const handleSend = useCallback(() => {
+    if (!inputText.trim() || !isConnected) return;
+    
+    sendWsMessage(chatId, inputText.trim());
     setInputText('');
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [inputText]);
+  }, [inputText, chatId, isConnected, sendWsMessage]);
 
   const renderMessage = useCallback(({ item }: { item: ChatMessage }) => {
-    const isMe = item.senderId === 'current';
+    const isMe = item.senderId === userId;
     return (
       <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
+        {!isMe && item.senderName && (
+          <Text style={styles.senderName}>{item.senderName}</Text>
+        )}
         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
           <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
           <Text style={[styles.timestamp, isMe && styles.timestampMe]}>{item.timestamp}</Text>
         </View>
       </View>
     );
-  }, []);
+  }, [userId]);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -45,20 +101,40 @@ export default function ChatScreen() {
           title: name || 'Chat',
           headerStyle: { backgroundColor: Colors.primaryDark },
           headerTintColor: Colors.white,
+          headerRight: () => type === 'group' ? (
+            <TouchableOpacity 
+              onPress={() => router.push({ 
+                pathname: '/chat/group-info' as any, 
+                params: { id: chatId, name, ownerId, participants, admins } 
+              })}
+              style={{ marginRight: spacing.sm }}
+            >
+              <Info size={22} color={Colors.white} />
+            </TouchableOpacity>
+          ) : null,
         }}
       />
       <View style={styles.encryptedBanner}>
         <Lock size={12} color={Colors.textMuted} />
-        <Text style={styles.encryptedText}>Messages are end-to-end encrypted</Text>
+        <Text style={styles.encryptedText}>
+          {isConnected ? 'Messages are end-to-end encrypted' : 'Connecting...'}
+        </Text>
       </View>
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messageList}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.messageList}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        />
+      )}
       <View style={styles.inputArea}>
         <TextInput
           style={styles.input}
@@ -70,11 +146,11 @@ export default function ChatScreen() {
           maxLength={1000}
         />
         <TouchableOpacity
-          style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, (!inputText.trim() || !isConnected) && styles.sendBtnDisabled]}
           onPress={handleSend}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || !isConnected}
         >
-          <Send size={20} color={inputText.trim() ? Colors.white : Colors.textMuted} />
+          <Send size={20} color={inputText.trim() && isConnected ? Colors.white : Colors.textMuted} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -108,6 +184,12 @@ const styles = StyleSheet.create({
   },
   msgRowMe: {
     alignItems: 'flex-end',
+  },
+  senderName: {
+    fontSize: fontSize.xs,
+    color: Colors.textMuted,
+    marginBottom: 2,
+    marginLeft: spacing.xs,
   },
   bubble: {
     maxWidth: '80%',

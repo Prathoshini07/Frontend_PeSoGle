@@ -59,4 +59,16 @@ export const profileService = {
     const response = await apiClient.put<ProfileResponse>('/profile/api/v1/profile/me', data);
     return response.data;
   },
+
+  searchProfiles: async (query: string): Promise<ProfileResponse[]> => {
+    console.log('[ProfileService] Searching profiles:', query);
+    const response = await apiClient.get<ProfileResponse[]>(`/profile/api/v1/profile/search/?q=${query}`);
+    return response.data;
+  },
+
+  getProfilesBulk: async (userIds: string[]): Promise<Record<string, ProfileResponse>> => {
+    console.log('[ProfileService] Fetching profiles bulk:', userIds.length);
+    const response = await apiClient.post<Record<string, ProfileResponse>>('/profile/api/v1/profile/bulk', { user_ids: userIds });
+    return response.data;
+  },
 };

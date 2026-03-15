@@ -10,6 +10,8 @@ import TagChip from '@/components/TagChip';
 import { mockUsers } from '@/mocks/users';
 import type { User } from '@/mocks/users';
 
+import { chatService } from '@/services/chatService';
+
 const roleFilters = ['All', 'Student', 'Mentor', 'Researcher'];
 const domainFilters = ['All', 'AI & ML', 'Web Dev', 'Security', 'Data Science', 'IoT'];
 
@@ -37,8 +39,18 @@ export default function MatchesScreen() {
     return results;
   }, [roleFilter, domainFilter]);
 
-  const handleConnect = useCallback((user: User) => {
-    Alert.alert('Connection Sent', `Request sent to ${user.name}`);
+  const handleConnect = useCallback(async (user: User) => {
+    try {
+      const response = await chatService.createRequest(user.id);
+      if (response.success) {
+        Alert.alert('Connection Sent', `Request sent to ${user.name}`);
+      } else {
+        Alert.alert('Error', 'Failed to send connection request. Please try again.');
+      }
+    } catch (error) {
+      console.error('[MatchesScreen] Failed to connect:', error);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    }
   }, []);
 
   const renderUser = useCallback(({ item }: { item: User }) => (
