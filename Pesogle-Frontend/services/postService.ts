@@ -34,11 +34,12 @@ export interface CreatePostData {
 }
 
 export const postService = {
-  getPosts: async (category?: string, type?: string): Promise<ApiResponse<Post[]>> => {
-    console.log('[PostService] Fetching posts, category:', category, 'type:', type);
+  getPosts: async (category?: string, type?: string, q?: string): Promise<ApiResponse<Post[]>> => {
+    console.log('[PostService] Fetching posts, category:', category, 'type:', type, 'q:', q);
     const params: Record<string, string> = {};
     if (category && category !== 'All') params.category = category;
     if (type && type !== 'All') params.type = type;
+    if (q) params.q = q;
 
     const response = await apiClient.get('/posts/', { params });
 
@@ -173,6 +174,28 @@ export const postService = {
 
   acceptAnswer: async (answerId: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await apiClient.post(`/posts/questions/answers/${answerId}/accept`);
+    return response.data;
+  },
+
+  removeVote: async (targetId: string, targetType: string = 'POST'): Promise<ApiResponse<{ message: string }>> => {
+    const response = await apiClient.delete(`/posts/vote`, {
+      data: { target_type: targetType, target_id: targetId }
+    });
+    return response.data;
+  },
+
+  deletePost: async (postId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await apiClient.delete(`/posts/${postId}`);
+    return response.data;
+  },
+
+  deleteAnswer: async (answerId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await apiClient.delete(`/posts/questions/answers/${answerId}`);
+    return response.data;
+  },
+
+  deleteComment: async (commentId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await apiClient.delete(`/posts/comments/${commentId}`);
     return response.data;
   },
 };
