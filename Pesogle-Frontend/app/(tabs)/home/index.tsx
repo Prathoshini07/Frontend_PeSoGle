@@ -1,21 +1,47 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Stack } from 'expo-router';
-import { Bell, ChevronRight, TrendingUp, Sparkles, BookOpen } from 'lucide-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
+import { useRouter, Stack } from 'expo-router';
+import { Bell, ChevronRight, TrendingUp, Sparkles, BookOpen, LogOut } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import UserCard from '@/components/UserCard';
 import PostCard from '@/components/PostCard';
-import { mockUsers } from '@/mocks/users';
+import { mockUsers, currentUser } from '@/mocks/users';
+import { postService } from '@/services/postService';
+import type { Post } from '@/mocks/posts';
 import { mockPosts } from '@/mocks/posts';
 import { useAuth } from '@/context/AuthContext';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { email } = useAuth();
+  const { email, logout } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: logout },
+      ]
+    );
+  };
   const topMentors = mockUsers.filter(u => u.role === 'mentor' || u.matchPercentage >= 80).slice(0, 4);
-  const trendingPosts = mockPosts.slice(0, 3);
+  const [trendingPosts, setTrendingPosts] = useState<Post[]>([]);
+
+  useEffect(() => {
+    const fetchTrending = async () => {
+      try {
+        const response = await postService.getPosts();
+        if (response.success && response.data) {
+          setTrendingPosts(response.data.slice(0, 3));
+        }
+      } catch (error) {
+        console.log('[Home] Failed to fetch trending posts:', error);
+      }
+    };
+    fetchTrending();
+  }, []);
 
   const renderMentorCard = useCallback(({ item }: { item: typeof mockUsers[0] }) => (
     <UserCard user={item} compact onPress={() => console.log('[Home] View mentor:', item.id)} />
@@ -27,10 +53,15 @@ export default function HomeScreen() {
         options={{
           headerTitle: '',
           headerRight: () => (
-            <TouchableOpacity style={styles.notifBtn}>
-              <Bell size={22} color={Colors.primaryDark} />
-              <View style={styles.notifDot} />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.notifBtn}>
+                <Bell size={22} color={Colors.primaryDark} />
+                <View style={styles.notifDot} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                <LogOut size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -167,6 +198,11 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: Colors.primaryDark,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   notifBtn: {
     width: 40,
     height: 40,
@@ -184,6 +220,15 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: Colors.accent,
+  },
+  logoutBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.sm,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,

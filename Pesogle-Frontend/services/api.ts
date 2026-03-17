@@ -1,6 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 
 // For physical devices (Expo Go), localhost refers to the device itself.
 // We need to use the computer's local IP instead.
@@ -21,12 +22,15 @@ const API_BASE_URL = getBaseUrl();
 console.log('[API] Using Base URL:', API_BASE_URL);
 const AUTH_STORAGE_KEY = 'pesogle_auth';
 
+// Callback registry to allow AuthContext to trigger logout from here
+let onAuthError: () => void = () => { };
+export const registerAuthErrorHandler = (handler: () => void) => {
+  onAuthError = handler;
+};
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 apiClient.interceptors.request.use(
@@ -38,6 +42,11 @@ apiClient.interceptors.request.use(
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+      } else {
+        // Fallback DEV token for testing the backend bypass
+        // This simulates random token just to pass HTTPBearer(auto_error=False) 
+        // Backend DEV_MODE handles the actual User ID resolution
+        config.headers.Authorization = `Bearer dev_override_token`;
       }
     } catch (e) {
       console.log('[API] Interceptor error fetching token:', e);
@@ -57,8 +66,27 @@ apiClient.interceptors.response.use(
     console.log(`[API] Response ${response.status} from ${response.config.url}`);
     return response;
   },
-  (error) => {
+  async (error) => {
     console.log('[API] Response error:', error?.response?.status, error?.message);
+    if (error?.response?.status === 401) {
+      console.log('[API] Unauthorized. Purging auth and redirecting to login.');
+      try {
+        await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      } catch (e) {
+        // ignore storage clear errors
+      }
+      // Call the registered context handler to handle state & navigation
+      if (onAuthError) {
+        onAuthError();
+      } else {
+        try {
+          // Fallback global redirect if handler not bound
+          router.replace('/(auth)/login');
+        } catch (e) {
+          console.warn('[API] Router navigate failed. Possibly rendering context issue:', e);
+        }
+      }
+    }
     return Promise.reject(error);
   }
 );

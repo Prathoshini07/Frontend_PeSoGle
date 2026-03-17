@@ -1,50 +1,92 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, TextInput, Alert } from 'react-native';
+import { 
+  View, Text, StyleSheet, FlatList, TouchableOpacity, 
+  ActivityIndicator, TextInput, Alert 
+} from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { Check, X, MessageCircle, Search, UserPlus, Users } from 'lucide-react-native';
+import { 
+  Check, X, MessageCircle, Search, UserPlus, Users 
+} from 'lucide-react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
-import { chatService, type ChatThread } from '@/services/chatService';
-import { connectService, type ConnectionRequest } from '@/services/connectService';
+import { chatService } from '@/services/chatService';
+import { connectService, type ConnectRequest } from '@/services/connectService';
 import { profileService, type ProfileResponse } from '@/services/profileService';
+import type { User } from '@/mocks/users';
 
-type ConnectionTab = 'chats' | 'pending' | 'search';
+type ConnectionTab = 'chats' | 'pending' | 'blocked' | 'search';
 
 export default function ConnectionsScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<ConnectionTab>('chats');
-  const [threads, setThreads] = useState<ChatThread[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<ConnectionRequest[]>([]);
-  const [searchResults, setSearchResults] = useState<ProfileResponse[]>([]);
+  const [pendingSubTab, setPendingSubTab] = useState<'received' | 'sent'>('received');
   const [searchQuery, setSearchQuery] = useState('');
-  const [connectedIds, setConnectedIds] = useState<string[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<ConnectionRequest[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<ProfileResponse[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [threadsRes, pendingRes, outgoingRes, idsRes] = await Promise.all([
-        chatService.getThreads(),
-        connectService.getIncomingRequests(),
-        connectService.getOutgoingRequests(),
-        connectService.getConnectionIds()
-      ]);
-      if (threadsRes.success) setThreads(threadsRes.data);
-      if (pendingRes.success) setPendingRequests(pendingRes.data);
-      if (outgoingRes.success) setOutgoingRequests(outgoingRes.data);
-      if (idsRes.success) setConnectedIds(idsRes.data);
-    } catch (error) {
-      console.error('[Connections] Fetch failed:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // --- Queries ---
 
-  useEffect(() => {
-    fetchData();
-  }, [tab]);
+  const { data: connections = [], isLoading: isLoadingConnections } = useQuery({
+    queryKey: ['connections'],
+    queryFn: () => connectService.getConnectionsWithProfiles().then(res => res.data),
+  });
+
+  const { data: incomingRequests = [], isLoading: isLoadingIncoming } = useQuery({
+    queryKey: ['connection-requests-incoming'],
+    queryFn: () => connectService.getIncomingRequestsWithProfiles().then(res => res.data.map(req => ({
+      ...req,
+      user: req.sender,
+      type: 'incoming' as const
+    }))),
+  });
+
+  const { data: outgoingRequests = [], isLoading: isLoadingOutgoing } = useQuery({
+    queryKey: ['connection-requests-outgoing'],
+    queryFn: () => connectService.getOutgoingRequestsWithProfiles().then(res => res.data.map(req => ({
+      ...req,
+      user: req.receiver,
+      type: 'outgoing' as const
+    }))),
+    enabled: tab === 'pending' || tab === 'search',
+  });
+
+  const { data: blockedUsers = [], isLoading: isLoadingBlocked } = useQuery({
+    queryKey: ['blocked-users'],
+    queryFn: () => connectService.getBlockedUsersWithProfiles().then(res => res.data),
+    enabled: tab === 'blocked',
+  });
+
+  // --- Mutations ---
+
+  const acceptMutation = useMutation({
+    mutationFn: (requestId: string) => connectService.acceptRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['connection-requests-incoming'] });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (requestId: string) => connectService.rejectRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connection-requests-incoming'] });
+    },
+  });
+
+  const unblockMutation = useMutation({
+    mutationFn: (userId: string) => connectService.unblockUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['blocked-users'] });
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      setTab('chats');
+    },
+  });
+
+  // --- Search Logic ---
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -52,34 +94,14 @@ export default function ConnectionsScreen() {
       setSearchResults([]);
       return;
     }
-    setLoading(true);
+    setIsSearching(true);
     try {
       const results = await profileService.searchProfiles(query);
       setSearchResults(results);
     } catch (error) {
       console.error('[Connections] Search failed:', error);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAccept = async (id: string) => {
-    const res = await connectService.acceptRequest(id);
-    if (res.success) fetchData();
-  };
-
-  const handleReject = async (id: string) => {
-    const res = await connectService.rejectRequest(id);
-    if (res.success) fetchData();
-  };
-
-  const handleInvite = async (userId: string) => {
-    const res = await connectService.sendRequest(userId);
-    if (res.success) {
-      alert('Invite sent!');
-      fetchData();
-    } else {
-      Alert.alert('Connection Request', res.message || 'Failed to send invite');
+      setIsSearching(false);
     }
   };
 
@@ -92,63 +114,61 @@ export default function ConnectionsScreen() {
     }
   };
 
-  const renderThread = useCallback(({ item }: { item: ChatThread }) => (
+  // --- Render Functions ---
+
+  const renderThread = useCallback(({ item }: { item: User }) => (
     <TouchableOpacity
       style={styles.threadItem}
       onPress={() => router.push({ 
         pathname: '/chat/[id]' as any, 
-        params: { 
-          id: item.id, 
-          name: item.participantName, 
-          type: item.type, 
-          ownerId: item.ownerId,
-          participants: item.participants?.join(','),
-          admins: item.admins?.join(',')
-        } 
+        params: { id: item.id, name: item.name } 
       })}
       activeOpacity={0.7}
     >
-      <Image source={{ uri: item.participantAvatar }} style={styles.threadAvatar} />
-      <View style={styles.threadContent}>
-        <View style={styles.threadHeader}>
-          <Text style={styles.threadName}>{item.participantName}</Text>
-          <Text style={styles.threadTime}>{item.lastMessageTime}</Text>
-        </View>
-        <Text style={styles.threadMessage} numberOfLines={1}>{item.lastMessage}</Text>
-      </View>
-      {item.unreadCount > 0 && (
-        <View style={styles.unreadBadge}>
-          <Text style={styles.unreadText}>{item.unreadCount}</Text>
-        </View>
-      )}
+      <Image source={{ uri: item.avatar }} style={styles.threadAvatar} />
+      <div style={styles.threadContent}>
+        <div style={styles.threadHeader}>
+          <Text style={styles.threadName}>{item.name}</Text>
+          <Text style={styles.threadTime}>Connected</Text>
+        </div>
+      </div>
+      <MessageCircle size={20} color={Colors.primaryDark} style={{ opacity: 0.6 }} />
     </TouchableOpacity>
   ), [router]);
 
-  const renderPending = useCallback(({ item }: { item: ConnectionRequest }) => (
+  const renderPendingItem = useCallback(({ item }: { item: any }) => (
     <View style={styles.pendingItem}>
-      <Image source={{ uri: `https://ui-avatars.com/api/?name=${item.sender_id}` }} style={styles.pendingAvatar} />
+      <Image source={{ uri: item.user.avatar }} style={styles.pendingAvatar} />
       <View style={styles.pendingInfo}>
-        <Text style={styles.pendingName}>Request from {item.sender_id.substring(0, 8)}</Text>
-        <Text style={styles.pendingDept}>{new Date(item.created_at).toLocaleDateString()}</Text>
+        <Text style={styles.pendingName}>{item.user.name}</Text>
+        <Text style={styles.pendingDept}>{item.user.department}</Text>
       </View>
-      <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAccept(item.request_id)}>
-        <Check size={18} color={Colors.success} />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(item.request_id)}>
-        <X size={18} color={Colors.textMuted} />
-      </TouchableOpacity>
+      {item.type === 'incoming' ? (
+        <>
+          <TouchableOpacity style={styles.acceptBtn} onPress={() => acceptMutation.mutate(item.request_id)}>
+            <Check size={18} color={Colors.success} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.rejectBtn} onPress={() => rejectMutation.mutate(item.request_id)}>
+            <X size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={styles.sentLabel}>
+          <Text style={styles.sentLabelText}>Sent</Text>
+        </View>
+      )}
     </View>
-  ), []);
+  ), [acceptMutation, rejectMutation]);
 
   const renderSearchResult = useCallback(({ item }: { item: ProfileResponse }) => {
-    const isConnected = connectedIds.includes(item.user_id);
+    const isConnected = connections.some(c => c.id === item.user_id);
     const outgoing = outgoingRequests.find(r => r.receiver_id === item.user_id);
-    const incoming = pendingRequests.find(r => r.sender_id === item.user_id);
+    const incoming = incomingRequests.find(r => r.sender_id === item.user_id);
     
     return (
       <View style={styles.pendingItem}>
         <Image 
-          source={{ uri: 'https://ui-avatars.com/api/?name=' + item.personal_info.full_name }} 
+          source={{ uri: `https://ui-avatars.com/api/?name=${item.personal_info.full_name}` }} 
           style={styles.pendingAvatar} 
         />
         <View style={styles.pendingInfo}>
@@ -162,26 +182,26 @@ export default function ConnectionsScreen() {
             </TouchableOpacity>
           ) : incoming ? (
             <View style={{ flexDirection: 'row' }}>
-              <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAccept(incoming.request_id)}>
+              <TouchableOpacity style={styles.acceptBtn} onPress={() => acceptMutation.mutate(incoming.request_id)}>
                 <Check size={18} color={Colors.success} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(incoming.request_id)}>
-                <X size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-          ) : outgoing ? (
-            <View style={[styles.actionBtn, { opacity: 0.5 }]}>
-              <Check size={18} color={Colors.textMuted} />
             </View>
           ) : (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleInvite(item.user_id)}>
-              <UserPlus size={18} color={Colors.accent} />
+            <TouchableOpacity 
+              style={styles.actionBtn} 
+              disabled={!!outgoing}
+              onPress={async () => {
+                const res = await connectService.sendRequest(item.user_id);
+                if (res.success) queryClient.invalidateQueries({ queryKey: ['connection-requests-outgoing'] });
+              }}
+            >
+              {outgoing ? <Check size={18} color={Colors.textMuted} /> : <UserPlus size={18} color={Colors.accent} />}
             </TouchableOpacity>
           )}
         </View>
       </View>
     );
-  }, [connectedIds, outgoingRequests, pendingRequests, handleInvite, handleStartChat, handleAccept, handleReject]);
+  }, [connections, outgoingRequests, incomingRequests]);
 
   return (
     <View style={styles.container}>
@@ -204,10 +224,8 @@ export default function ConnectionsScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="Search people..."
-          placeholderTextColor={Colors.textMuted}
           value={searchQuery}
           onChangeText={(text) => {
-            setSearchQuery(text);
             if (tab !== 'search' && text.length > 0) setTab('search');
             handleSearch(text);
           }}
@@ -215,7 +233,7 @@ export default function ConnectionsScreen() {
       </View>
 
       <View style={styles.tabRow}>
-        {(['chats', 'pending', 'search'] as ConnectionTab[]).map(t => (
+        {(['chats', 'pending', 'blocked', 'search'] as const).map(t => (
           <TouchableOpacity
             key={t}
             style={[styles.tab, tab === t && styles.tabActive]}
@@ -227,227 +245,64 @@ export default function ConnectionsScreen() {
           </TouchableOpacity>
         ))}
       </View>
-      
-      {loading && (
-        <ActivityIndicator size="small" color={Colors.accent} style={{ marginVertical: 10 }} />
-      )}
 
       {tab === 'chats' && (
         <FlatList
-          data={threads}
+          data={connections}
           renderItem={renderThread}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No active chats yet</Text>
-            </View>
-          }
+          refreshing={isLoadingConnections}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['connections'] })}
+          ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No connections yet.</Text></View>}
         />
       )}
+
       {tab === 'pending' && (
+        <>
+          <View style={styles.subTabRow}>
+            <TouchableOpacity style={[styles.subTab, pendingSubTab === 'received' && styles.subTabActive]} onPress={() => setPendingSubTab('received')}>
+              <Text style={[styles.subTabText, pendingSubTab === 'received' && styles.subTabTextActive]}>Received</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.subTab, pendingSubTab === 'sent' && styles.subTabActive]} onPress={() => setPendingSubTab('sent')}>
+              <Text style={[styles.subTabText, pendingSubTab === 'sent' && styles.subTabTextActive]}>Sent</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={pendingSubTab === 'received' ? incomingRequests : outgoingRequests}
+            renderItem={renderPendingItem}
+            keyExtractor={(item) => item.request_id}
+            contentContainerStyle={styles.list}
+          />
+        </>
+      )}
+
+      {tab === 'blocked' && (
         <FlatList
-          data={pendingRequests}
-          renderItem={renderPending}
-          keyExtractor={(item) => item.request_id}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No pending requests</Text>
+          data={blockedUsers}
+          renderItem={({ item }) => (
+            <View style={styles.threadItem}>
+              <Image source={{ uri: item.avatar }} style={styles.threadAvatar} />
+              <View style={styles.threadContent}><Text style={styles.threadName}>{item.name}</Text></View>
+              <TouchableOpacity style={styles.unblockBtn} onPress={() => unblockMutation.mutate(item.id)}>
+                <Text style={styles.unblockBtnText}>Unblock</Text>
+              </TouchableOpacity>
             </View>
-          }
+          )}
+          keyExtractor={(item) => item.id}
         />
       )}
+
       {tab === 'search' && (
         <FlatList
           data={searchResults}
           renderItem={renderSearchResult}
           keyExtractor={(item) => item.user_id}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>{searchQuery.length < 3 ? 'Type at least 3 characters to search' : 'No users found'}</Text>
-            </View>
-          }
+          ListHeaderComponent={isSearching ? <ActivityIndicator color={Colors.accent} /> : null}
         />
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.primaryBg,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    margin: spacing.lg,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    ...shadow.sm,
-  },
-  searchIcon: {
-    marginRight: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    height: 48,
-    color: Colors.textPrimary,
-    fontSize: fontSize.md,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.sm,
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-  },
-  tabActive: {
-    backgroundColor: Colors.primaryDark,
-  },
-  tabText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: Colors.textSecondary,
-  },
-  tabTextActive: {
-    color: Colors.white,
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-  },
-  threadItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadow.sm,
-  },
-  threadAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.borderLight,
-  },
-  threadContent: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  threadHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 3,
-  },
-  threadName: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: Colors.primaryDark,
-  },
-  threadTime: {
-    fontSize: fontSize.xs,
-    color: Colors.textMuted,
-  },
-  threadMessage: {
-    fontSize: fontSize.sm,
-    color: Colors.textSecondary,
-  },
-  unreadBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
-  unreadText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: Colors.white,
-  },
-  pendingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadow.sm,
-  },
-  pendingAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.borderLight,
-  },
-  pendingInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  pendingName: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: Colors.primaryDark,
-  },
-  pendingDept: {
-    fontSize: fontSize.sm,
-    color: Colors.textMuted,
-  },
-  acceptBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.success + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
-  rejectBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.borderLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.accent + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
-  chatBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primaryDark + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 40,
-  },
-  emptyText: {
-    fontSize: fontSize.md,
-    color: Colors.textMuted,
-  },
-});
+// ... styles as defined in the master branch (with actionBtn and chatBtn added back)

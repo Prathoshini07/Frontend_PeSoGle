@@ -1,4 +1,4 @@
-import apiClient from './api';
+import apiClient, { type ApiResponse } from './api';
 
 export type Degree = 'B.Tech' | 'M.Sc' | 'M.Tech' | 'PhD';
 
@@ -48,15 +48,17 @@ export const profileService = {
     return response.data;
   },
 
-  createProfile: async (data: ProfileCreateRequest): Promise<ProfileResponse> => {
-    console.log('[ProfileService] Creating profile:', data.personal_info.full_name);
-    const response = await apiClient.post<ProfileResponse>('/profile/api/v1/profile/', data);
+  getProfileById: async (userId: string): Promise<ProfileResponse> => {
+    console.log('[ProfileService] Fetching profile by ID:', userId);
+    const response = await apiClient.get<ProfileResponse>(`/profile/api/v1/profile/${userId}`);
     return response.data;
   },
 
-  updateProfile: async (data: ProfileCreateRequest): Promise<ProfileResponse> => {
-    console.log('[ProfileService] Updating profile');
-    const response = await apiClient.put<ProfileResponse>('/profile/api/v1/profile/me', data);
+  searchProfiles: async (query: string): Promise<{ user_id: string; full_name: string; email: string }[]> => {
+    console.log('[ProfileService] Searching profiles for:', query);
+    const response = await apiClient.get('/profile/api/v1/profile/search', {
+      params: { query }
+    });
     return response.data;
   },
 
@@ -71,4 +73,5 @@ export const profileService = {
     const response = await apiClient.post<Record<string, ProfileResponse>>('/profile/api/v1/profile/bulk', { user_ids: userIds });
     return response.data;
   },
+  }
 };

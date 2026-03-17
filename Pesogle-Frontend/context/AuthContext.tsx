@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import createContextHook from '@nkzw/create-context-hook';
+import { registerAuthErrorHandler } from '@/services/api';
 
 type AuthStatus = 'loading' | 'unauthenticated' | 'needsProfile' | 'authenticated';
 
@@ -25,12 +26,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const authQuery = useQuery({
     queryKey: ['auth-state'],
     queryFn: async () => {
-      console.log('[Auth] Loading stored auth state');
+      console.log('[AuthContext] Checking AsyncStorage...');
       const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
       const profileComplete = await AsyncStorage.getItem(PROFILE_COMPLETE_KEY);
+      console.log('[AuthContext] Stored data found:', !!stored, 'Profile complete:', profileComplete);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        return { ...parsed, profileComplete: profileComplete === 'true' };
+        try {
+          const parsed = JSON.parse(stored);
+          return { ...parsed, profileComplete: profileComplete === 'true' };
+        } catch (e) {
+          console.error('[AuthContext] Error parsing stored auth:', e);
+          return null;
+        }
       }
       return null;
     },
@@ -87,8 +94,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      console.log('[Auth] Clearing auth state');
+      console.log('[AuthContext] Explicitly clearing auth keys...');
       await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, PROFILE_COMPLETE_KEY]);
+      const check = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+      console.log('[AuthContext] Verification - Key is now:', check);
     },
     onSuccess: () => {
       setAuthState({ status: 'unauthenticated', email: '', token: null });
@@ -107,6 +116,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const logout = useCallback(() => {
     logoutMutation.mutate();
   }, [logoutMutation]);
+
+  // Register the logout function with the API interceptor
+  useEffect(() => {
+    console.log('[AuthContext] Registering logout handler with API');
+    registerAuthErrorHandler(logout);
+  }, [logout]);
 
   return {
     status: authState.status,
