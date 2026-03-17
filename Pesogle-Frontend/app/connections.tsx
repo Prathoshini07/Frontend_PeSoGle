@@ -12,7 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
-import { chatService } from '@/services/chatService';
+import { chatService, type ChatThread } from '@/services/chatService';
 import { connectService, type ConnectRequest } from '@/services/connectService';
 import { profileService, type ProfileResponse } from '@/services/profileService';
 import type { User } from '@/mocks/users';
@@ -58,6 +58,16 @@ export default function ConnectionsScreen() {
     queryKey: ['blocked-users'],
     queryFn: () => connectService.getBlockedUsersWithProfiles().then(res => res.data),
     enabled: tab === 'blocked',
+  });
+  
+  const { data: chatThreads = [], isLoading: isLoadingThreads } = useQuery({
+    queryKey: ['chat-threads'],
+    queryFn: async () => {
+      const prof = await profileService.getProfile();
+      const res = await chatService.getThreads(prof.user_id);
+      return res.data;
+    },
+    enabled: tab === 'chats',
   });
 
   // --- Mutations ---
@@ -108,33 +118,54 @@ export default function ConnectionsScreen() {
   const handleStartChat = async (userId: string, name: string) => {
     const res = await chatService.getOrCreateIndividualThread(userId);
     if (res.success) {
-      router.push({ pathname: '/chat/[id]' as any, params: { id: res.data.id, name } });
+      router.push({ 
+        pathname: '/chat/[id]' as any, 
+        params: { 
+          id: res.data.id, 
+          name, 
+          type: res.data.type || 'individual' 
+        } 
+      });
     } else {
       Alert.alert('Unable to start chat', res.message || 'Make sure you are connected first.');
     }
   };
 
+  const handleGoToChat = (thread: ChatThread) => {
+    router.push({ 
+      pathname: '/chat/[id]' as any, 
+      params: { 
+        id: thread.id, 
+        name: thread.participantName,
+        type: thread.type,
+        ownerId: thread.ownerId,
+        participants: JSON.stringify(thread.participants || []),
+        admins: JSON.stringify(thread.admins || [])
+      } 
+    });
+  };
+
   // --- Render Functions ---
 
-  const renderThread = useCallback(({ item }: { item: User }) => (
+  const renderThread = useCallback(({ item }: { item: ChatThread }) => (
     <TouchableOpacity
       style={styles.threadItem}
-      onPress={() => router.push({ 
-        pathname: '/chat/[id]' as any, 
-        params: { id: item.id, name: item.name } 
-      })}
+      onPress={() => handleGoToChat(item)}
       activeOpacity={0.7}
     >
-      <Image source={{ uri: item.avatar }} style={styles.threadAvatar} />
-      <div style={styles.threadContent}>
-        <div style={styles.threadHeader}>
-          <Text style={styles.threadName}>{item.name}</Text>
-          <Text style={styles.threadTime}>Connected</Text>
-        </div>
-      </div>
+      <Image source={{ uri: item.participantAvatar }} style={styles.threadAvatar} />
+      <View style={styles.threadContent}>
+        <View style={styles.threadHeader}>
+          <Text style={styles.threadName}>{item.participantName}</Text>
+          <Text style={styles.threadTime}>{item.lastMessageTime}</Text>
+        </View>
+        <Text style={styles.threadMessage} numberOfLines={1}>
+          {item.lastMessage}
+        </Text>
+      </View>
       <MessageCircle size={20} color={Colors.primaryDark} style={{ opacity: 0.6 }} />
     </TouchableOpacity>
-  ), [router]);
+  ), [router, handleGoToChat]);
 
   const renderPendingItem = useCallback(({ item }: { item: any }) => (
     <View style={styles.pendingItem}>
@@ -248,13 +279,18 @@ export default function ConnectionsScreen() {
 
       {tab === 'chats' && (
         <FlatList
-          data={connections}
+          data={chatThreads}
           renderItem={renderThread}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          refreshing={isLoadingConnections}
-          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['connections'] })}
-          ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No connections yet.</Text></View>}
+          refreshing={isLoadingThreads}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['chat-threads'] })}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No chats yet</Text>
+              <Text style={styles.emptyText}>Go to Search to find and connect with peers!</Text>
+            </View>
+          }
         />
       )}
 
@@ -304,5 +340,234 @@ export default function ConnectionsScreen() {
     </View>
   );
 }
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.primaryBg,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    margin: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    ...shadow.sm,
+  },
+  searchIcon: {
+    marginRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    height: 48,
+    color: Colors.textPrimary,
+    fontSize: fontSize.md,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+  },
+  tabActive: {
+    backgroundColor: Colors.primaryDark,
+  },
+  subTabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  subTab: {
+    flex: 1,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    backgroundColor: Colors.borderLight + '30',
+  },
+  subTabActive: {
+    backgroundColor: Colors.accent + '20',
+  },
+  subTabText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: Colors.textMuted,
+  },
+  subTabTextActive: {
+    color: Colors.accent,
+  },
+  tabText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: Colors.textSecondary,
+  },
+  tabTextActive: {
+    color: Colors.white,
+  },
+  list: {
+    paddingHorizontal: spacing.lg,
+  },
+  threadItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadow.sm,
+  },
+  threadAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.borderLight,
+  },
+  threadContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  threadHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+  },
+  threadName: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: Colors.primaryDark,
+  },
+  threadTime: {
+    fontSize: fontSize.xs,
+    color: Colors.textMuted,
+  },
+  threadMessage: {
+    fontSize: fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  unreadBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  unreadText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.white,
+  },
+  pendingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadow.sm,
+  },
+  pendingAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.borderLight,
+  },
+  pendingInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  pendingName: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: Colors.primaryDark,
+  },
+  pendingDept: {
+    fontSize: fontSize.sm,
+    color: Colors.textMuted,
+  },
+  sentLabel: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    backgroundColor: Colors.borderLight,
+  },
+  sentLabelText: {
+    fontSize: fontSize.xs,
+    color: Colors.textMuted,
+    fontWeight: fontWeight.medium,
+  },
+  acceptBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.success + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  rejectBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.accent + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  chatBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryDark + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+  emptyState: {
 
-// ... styles as defined in the master branch (with actionBtn and chatBtn added back)
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 40,
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  emptyTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: Colors.primaryDark,
+  },
+  unblockBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  unblockBtnText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: Colors.primaryDark,
+  },
+});

@@ -18,16 +18,32 @@ export function useChatWebSocket(userId: string | undefined) {
   const [isConnected, setIsConnected] = useState(false);
   const ws = useRef<WebSocket | null>(null);
 
+  const getWsBaseUrl = useCallback(() => {
+    const apiBase = process.env.EXPO_PUBLIC_API_URL;
+    if (apiBase) {
+      // Turn http(s)://host:port into ws(s)://host:port
+      return apiBase.replace(/^http:\/\//, 'ws://').replace(/^https:\/\//, 'wss://');
+    }
+
+    const debuggerHost = Constants.expoConfig?.hostUri || Constants.experienceId;
+    const address = debuggerHost?.split(':')[0] || 'localhost';
+    return `ws://${address}:8081`;
+  }, []);
+
   const connect = useCallback(() => {
     if (!userId || !token) return;
 
-    // Get the computer's local IP for the WebSocket connection
-    const debuggerHost = Constants.expoConfig?.hostUri || Constants.experienceId;
-    const address = debuggerHost?.split(':')[0] || 'localhost';
-    
-    // Construct the WebSocket URL. Backend requires ?token= for authentication.
-    // Gateway routes /chat/ -> chat service (root_path="/chat", prefix="/api/v1")
-    const wsUrl = `ws://${address}:8081/chat/api/v1/ws/${userId}?token=${token}`;
+    // Avoid creating multiple sockets
+    if (ws.current && (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    // Gateway routes by service name; configure if your gateway uses a different prefix.
+    // Example docs: http://localhost:8081/chat-service/docs
+    // WS: ws://localhost:8081/chat-service/api/v1/ws/<userId>?token=...
+    const CHAT_SERVICE_PATH = process.env.EXPO_PUBLIC_CHAT_SERVICE_PATH ?? '/chat';
+    const wsBaseUrl = getWsBaseUrl();
+    const wsUrl = `${wsBaseUrl}${CHAT_SERVICE_PATH}/api/v1/ws/${userId}?token=${encodeURIComponent(token)}`;
     
     console.log('[WebSocket] Connecting to:', wsUrl);
     
@@ -58,7 +74,7 @@ export function useChatWebSocket(userId: string | undefined) {
       // Reconnect after a delay
       setTimeout(connect, 3000);
     };
-  }, [userId, token]);
+  }, [userId, token, getWsBaseUrl]);
 
   useEffect(() => {
     connect();

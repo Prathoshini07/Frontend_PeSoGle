@@ -73,5 +73,4 @@ export const profileService = {
     const response = await apiClient.post<Record<string, ProfileResponse>>('/profile/api/v1/profile/bulk', { user_ids: userIds });
     return response.data;
   },
-  }
-};
+}

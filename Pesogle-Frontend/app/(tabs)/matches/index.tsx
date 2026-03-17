@@ -11,8 +11,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { matchService, type User } from '@/services/matchService';
 import { connectService } from '@/services/connectService';
 
-import { chatService } from '@/services/chatService';
-
 const roleFilters = ['All', 'Student', 'Mentor', 'Researcher'];
 const domainFilters = ['All', 'AI & ML', 'Web Dev', 'Security', 'Data Science', 'IoT'];
 
@@ -45,32 +43,21 @@ export default function MatchesScreen() {
 
   const matches = isPerfectMatchMode ? perfectMatches : (recommendationsRes?.data || []);
 
-  const handleConnect = useCallback(async (user: User) => {
-    try {
-      const response = await chatService.createRequest(user.id);
-      if (response.success) {
-        Alert.alert('Connection Sent', `Request sent to ${user.name}`);
-      } else {
-        Alert.alert('Error', 'Failed to send connection request. Please try again.');
-      }
-    } catch (error) {
-      console.error('[MatchesScreen] Failed to connect:', error);
-      Alert.alert('Error', 'An unexpected error occurred.');
-    }
   // Fetch initial connection status
   useEffect(() => {
     const fetchStatus = async () => {
       try {
         const [outgoingRes, connectionsRes] = await Promise.all([
           connectService.getOutgoingRequests(),
-          connectService.getConnectionIds()
+          connectService.getConnectionIds(),
         ]);
-        
+
         if (outgoingRes.success) {
-          setSentRequests(new Set(outgoingRes.data.map(r => r.receiver_id)));
+          setSentRequests(new Set(outgoingRes.data.map((r) => r.receiver_id)));
         }
         if (connectionsRes.success) {
-          setConnectedIds(new Set(connectionsRes.data.connection_ids));
+          // getConnectionIds() returns string[]
+          setConnectedIds(new Set(connectionsRes.data));
         }
       } catch (err) {
         console.error('[MatchesScreen] Failed to fetch connection status:', err);

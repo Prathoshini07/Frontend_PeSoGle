@@ -157,6 +157,40 @@ export const connectService = {
     } catch {
       return { data: [], success: false };
     }
+  },
+
+  getOutgoingRequestsWithProfiles: async (): Promise<ApiResponse<(ConnectRequest & { receiver: User })[]>> => {
+    try {
+      const { data: requests } = await connectService.getOutgoingRequests();
+      const richRequests = await Promise.all(
+        requests.map(async (req) => {
+          try {
+            const profile = await profileService.getProfileById(req.receiver_id);
+            return { ...req, receiver: mapProfileToUser(profile, 'Sent Request') };
+          } catch { return null; }
+        })
+      );
+      return { data: richRequests.filter((r): r is any => r !== null), success: true };
+    } catch {
+      return { data: [], success: false };
+    }
+  },
+
+  getBlockedUsersWithProfiles: async (): Promise<ApiResponse<User[]>> => {
+    try {
+      const { data: blocks } = await connectService.getBlockedUsers();
+      const users = await Promise.all(
+        blocks.map(async (block) => {
+          try {
+            const profile = await profileService.getProfileById(block.blocked_id);
+            return mapProfileToUser(profile, 'Blocked');
+          } catch { return null; }
+        })
+      );
+      return { data: users.filter((u): u is User => u !== null), success: true };
+    } catch {
+      return { data: [], success: false, message: 'Failed to fetch blocked users' };
+    }
   }
 };
 

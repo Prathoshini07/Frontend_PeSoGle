@@ -25,7 +25,22 @@ export interface ChatThread {
 
 export const formatTime = (dateStr: string) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
+  
+  // If no timezone offset (+/-) and no 'Z' suffix, append 'Z' 
+  // so it's treated as UTC instead of local time.
+  let normalizedDateStr = dateStr;
+  if (!dateStr.includes('Z') && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    // Basic guard: only append if it looks like an ISO date-time
+    if (dateStr.includes('T')) {
+      normalizedDateStr = dateStr + 'Z';
+    }
+  }
+
+  const date = new Date(normalizedDateStr);
+  
+  // Check for invalid date
+  if (isNaN(date.getTime())) return dateStr;
+
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
   const seconds = date.getSeconds().toString().padStart(2, '0');
@@ -33,26 +48,36 @@ export const formatTime = (dateStr: string) => {
 };
 
 export const chatService = {
-  getThreads: async (): Promise<ApiResponse<ChatThread[]>> => {
+  getThreads: async (currentUserId?: string): Promise<ApiResponse<ChatThread[]>> => {
     try {
       console.log('[ChatService] Fetching threads');
       const response = await apiClient.get<any[]>('/chat/api/v1/threads');
       
-      const threads: ChatThread[] = response.data.map(t => ({
-        id: t.id || t._id,
-        type: t.type as 'individual' | 'group',
-        participantId: t.type === 'individual' 
-          ? t.participants.find((p: string) => p !== 'current') 
-          : t.id || t._id,
-        participantName: t.name || (t.type === 'individual' ? 'User' : 'Group'), 
-        participantAvatar: 'https://ui-avatars.com/api/?name=' + (t.name || (t.type === 'individual' ? 'U' : 'G')),
-        lastMessage: t.last_message || 'No messages yet',
-        lastMessageTime: formatTime(t.last_message_time),
-        unreadCount: 0,
-        ownerId: t.owner_id,
-        participants: t.participants,
-        admins: t.admins,
-      }));
+      const threads: ChatThread[] = response.data.map(t => {
+        const id = t.id || t._id;
+        const type = t.type as 'individual' | 'group';
+        
+        // For individual chats, find the other participant. 
+        // If currentUserId is provided, filter it out. Otherwise fall back to avoiding 'current' or picking first non-null.
+        let participantId = id;
+        if (type === 'individual' && t.participants) {
+          participantId = t.participants.find((p: string) => p !== currentUserId) || t.participants[0];
+        }
+
+        return {
+          id,
+          type,
+          participantId,
+          participantName: t.name || (type === 'individual' ? 'User' : 'Group'), 
+          participantAvatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(t.name || (type === 'individual' ? 'U' : 'G')),
+          lastMessage: t.last_message || 'No messages yet',
+          lastMessageTime: formatTime(t.last_message_time),
+          unreadCount: 0,
+          ownerId: t.owner_id,
+          participants: t.participants,
+          admins: t.admins,
+        };
+      });
 
       return { data: threads, success: true };
     } catch (error: any) {
