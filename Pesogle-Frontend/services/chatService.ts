@@ -1,80 +1,275 @@
-import type { ApiResponse } from './api';
+import apiClient, { type ApiResponse } from './api';
 
 export interface ChatMessage {
   id: string;
   senderId: string;
+  senderName?: string;
   text: string;
   timestamp: string;
-  read: boolean;
+  readBy: string[];
 }
 
 export interface ChatThread {
   id: string;
-  participantId: string;
+  type: 'individual' | 'group';
+  participantId: string; // For individual: other user id, For group: group id
   participantName: string;
   participantAvatar: string;
   lastMessage: string;
   lastMessageTime: string;
   unreadCount: number;
+  ownerId?: string;
+  participants?: string[];
+  admins?: string[];
 }
 
-export const mockThreads: ChatThread[] = [
-  {
-    id: 'c1',
-    participantId: '1',
-    participantName: 'Dr. Sarah Chen',
-    participantAvatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=face',
-    lastMessage: 'I reviewed your research proposal. Let\'s discuss the methodology section.',
-    lastMessageTime: '10m ago',
-    unreadCount: 2,
-  },
-  {
-    id: 'c2',
-    participantId: '2',
-    participantName: 'Raj Patel',
-    participantAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop&crop=face',
-    lastMessage: 'The distributed training setup is ready. Can you test the pipeline?',
-    lastMessageTime: '1h ago',
-    unreadCount: 0,
-  },
-  {
-    id: 'c3',
-    participantId: '3',
-    participantName: 'Emily Rodriguez',
-    participantAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face',
-    lastMessage: 'Pushed the new UI components. Check the PR when you get a chance!',
-    lastMessageTime: '3h ago',
-    unreadCount: 1,
-  },
-];
+export const formatTime = (dateStr: string) => {
+  if (!dateStr) return '';
+  
+  // If no timezone offset (+/-) and no 'Z' suffix, append 'Z' 
+  // so it's treated as UTC instead of local time.
+  let normalizedDateStr = dateStr;
+  if (!dateStr.includes('Z') && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    // Basic guard: only append if it looks like an ISO date-time
+    if (dateStr.includes('T')) {
+      normalizedDateStr = dateStr + 'Z';
+    }
+  }
 
-export const mockMessages: ChatMessage[] = [
-  { id: 'm1', senderId: '1', text: 'Hi Alex, I saw your project on sentiment analysis.', timestamp: '9:00 AM', read: true },
-  { id: 'm2', senderId: 'current', text: 'Yes! I would love your feedback on the approach.', timestamp: '9:05 AM', read: true },
-  { id: 'm3', senderId: '1', text: 'The transformer-based approach looks solid. Have you considered using cross-attention mechanisms?', timestamp: '9:10 AM', read: true },
-  { id: 'm4', senderId: 'current', text: 'Not yet. Could you point me to some relevant papers?', timestamp: '9:15 AM', read: true },
-  { id: 'm5', senderId: '1', text: 'I reviewed your research proposal. Let\'s discuss the methodology section.', timestamp: '9:30 AM', read: false },
-  { id: 'm6', senderId: '1', text: 'The literature review is strong but the experimental design needs more detail.', timestamp: '9:31 AM', read: false },
-];
+  const date = new Date(normalizedDateStr);
+  
+  // Check for invalid date
+  if (isNaN(date.getTime())) return dateStr;
+
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const seconds = date.getSeconds().toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+};
 
 export const chatService = {
-  getThreads: async (): Promise<ApiResponse<ChatThread[]>> => {
-    console.log('[ChatService] Fetching threads');
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { data: mockThreads, success: true };
+  getThreads: async (currentUserId?: string): Promise<ApiResponse<ChatThread[]>> => {
+    try {
+      console.log('[ChatService] Fetching threads');
+      const response = await apiClient.get<any[]>('/chat/api/v1/threads');
+      
+      const threads: ChatThread[] = response.data.map(t => {
+        const id = t.id || t._id;
+        const type = t.type as 'individual' | 'group';
+        
+        // For individual chats, find the other participant. 
+        // If currentUserId is provided, filter it out. Otherwise fall back to avoiding 'current' or picking first non-null.
+        let participantId = id;
+        if (type === 'individual' && t.participants) {
+          participantId = t.participants.find((p: string) => p !== currentUserId) || t.participants[0];
+        }
+
+        return {
+          id,
+          type,
+          participantId,
+          participantName: t.name || (type === 'individual' ? 'User' : 'Group'), 
+          participantAvatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(t.name || (type === 'individual' ? 'U' : 'G')),
+          lastMessage: t.last_message || 'No messages yet',
+          lastMessageTime: formatTime(t.last_message_time),
+          unreadCount: 0,
+          ownerId: t.owner_id,
+          participants: t.participants,
+          admins: t.admins,
+        };
+      });
+
+      return { data: threads, success: true };
+    } catch (error: any) {
+      return {
+        data: [],
+        success: false,
+        message: error.response?.data?.detail || 'Failed to fetch threads'
+      };
+    }
+  },
+  
+  getThread: async (chatId: string): Promise<ApiResponse<ChatThread>> => {
+    try {
+      console.log('[ChatService] Fetching thread:', chatId);
+      const response = await apiClient.get<any>(`/chat/api/v1/threads/${chatId}`);
+      const t = response.data;
+      
+      const thread: ChatThread = {
+        id: t.id || t._id,
+        type: t.type as 'individual' | 'group',
+        participantId: t.type === 'individual' 
+          ? t.participants.find((p: string) => p !== 'current') 
+          : t.id || t._id,
+        participantName: t.name || (t.type === 'individual' ? 'User' : 'Group'), 
+        participantAvatar: 'https://ui-avatars.com/api/?name=' + (t.name || (t.type === 'individual' ? 'U' : 'G')),
+        lastMessage: t.last_message || 'No messages yet',
+        lastMessageTime: formatTime(t.last_message_time),
+        unreadCount: 0,
+        ownerId: t.owner_id,
+        participants: t.participants,
+        admins: t.admins,
+      };
+
+      return { data: thread, success: true };
+    } catch (error: any) {
+      return {
+        data: {} as any,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to fetch thread'
+      };
+    }
   },
 
-  getMessages: async (threadId: string): Promise<ApiResponse<ChatMessage[]>> => {
-    console.log('[ChatService] Fetching messages for thread:', threadId);
-    await new Promise(resolve => setTimeout(resolve, 400));
-    return { data: mockMessages, success: true };
+  getMessages: async (threadId: string, limit: number = 50, offset: number = 0): Promise<ApiResponse<ChatMessage[]>> => {
+    try {
+      console.log(`[ChatService] Fetching messages for thread: ${threadId}, offset: ${offset}`);
+      const response = await apiClient.get<any[]>(`/chat/api/v1/threads/${threadId}/messages`, {
+        params: { limit, offset }
+      });
+      
+      const messages: ChatMessage[] = response.data.map(m => ({
+        id: m.id || m._id,
+        senderId: m.sender_id,
+        senderName: m.sender_name,
+        text: m.text,
+        timestamp: formatTime(m.timestamp),
+        readBy: m.read_by || [],
+      }));
+
+      return { data: messages, success: true };
+    } catch (error: any) {
+      return {
+        data: [],
+        success: false,
+        message: error.response?.data?.detail || 'Failed to fetch messages'
+      };
+    }
+  },
+
+  getOrCreateIndividualThread: async (otherUserId: string): Promise<ApiResponse<ChatThread>> => {
+    try {
+      console.log('[ChatService] Getting/Creating thread with:', otherUserId);
+      const response = await apiClient.post<any>(`/chat/api/v1/threads/individual/${otherUserId}`);
+      const t = response.data;
+      const thread: ChatThread = {
+        id: t.id || t._id,
+        type: 'individual',
+        participantId: otherUserId,
+        participantName: t.name || ('User ' + otherUserId.substring(0, 4)),
+        participantAvatar: 'https://ui-avatars.com/api/?name=' + (t.name || 'U'),
+        lastMessage: t.last_message || 'No messages yet',
+        lastMessageTime: formatTime(t.last_message_time),
+        unreadCount: 0,
+      };
+      return { data: thread, success: true };
+    } catch (error: any) {
+      return {
+        data: {} as any,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to initiate chat'
+      };
+    }
+  },
+
+  createGroupChat: async (name: string, participants: string[]): Promise<ApiResponse<ChatThread>> => {
+    try {
+      console.log('[ChatService] Creating group chat:', name);
+      const response = await apiClient.post<any>('/chat/api/v1/threads/group', { name, participants });
+      const t = response.data;
+      const thread: ChatThread = {
+        id: t.id || t._id,
+        type: 'group',
+        participantId: t.id || t._id,
+        participantName: t.name,
+        participantAvatar: 'https://ui-avatars.com/api/?name=' + t.name,
+        lastMessage: t.last_message || 'Group created',
+        lastMessageTime: formatTime(t.last_message_time),
+        unreadCount: 0,
+        ownerId: t.owner_id,
+        participants: t.participants,
+        admins: t.admins,
+      };
+      return { data: thread, success: true };
+    } catch (error: any) {
+      return {
+        data: {} as any,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to create group'
+      };
+    }
+  },
+
+  addGroupMember: async (chatId: string, userId: string): Promise<ApiResponse<boolean>> => {
+    try {
+      await apiClient.post(`/chat/api/v1/threads/${chatId}/members`, { user_id: userId });
+      return { data: true, success: true };
+    } catch (error: any) {
+      return {
+        data: false,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to add member'
+      };
+    }
+  },
+
+  removeGroupMember: async (chatId: string, userId: string): Promise<ApiResponse<boolean>> => {
+    try {
+      await apiClient.delete(`/chat/api/v1/threads/${chatId}/members/${userId}`);
+      return { data: true, success: true };
+    } catch (error: any) {
+      return {
+        data: false,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to remove member'
+      };
+    }
+  },
+
+  makeAdmin: async (chatId: string, userId: string): Promise<ApiResponse<boolean>> => {
+    try {
+      await apiClient.post(`/chat/api/v1/threads/${chatId}/admins`, { user_id: userId });
+      return { data: true, success: true };
+    } catch (error: any) {
+      return {
+        data: false,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to promote member'
+      };
+    }
+  },
+  
+  leaveGroup: async (chatId: string): Promise<ApiResponse<boolean>> => {
+    try {
+      await apiClient.post(`/chat/api/v1/threads/${chatId}/leave`);
+      return { data: true, success: true };
+    } catch (error: any) {
+      return {
+        data: false,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to leave group'
+      };
+    }
+  },
+
+  transferOwner: async (chatId: string, userId: string): Promise<ApiResponse<boolean>> => {
+    try {
+      await apiClient.post(`/chat/api/v1/threads/${chatId}/transfer-owner`, { user_id: userId });
+      return { data: true, success: true };
+    } catch (error: any) {
+      return {
+        data: false,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to transfer ownership'
+      };
+    }
   },
 
   sendMessage: async (threadId: string, text: string): Promise<ApiResponse<ChatMessage>> => {
+    // Note: Primarily using WebSockets for sending
     console.log('[ChatService] Sending message to thread:', threadId);
-    await new Promise(resolve => setTimeout(resolve, 300));
     return {
-      data: { id: 'm' + Date.now(), senderId: 'current', text, timestamp: 'Just now', read: false },
+      data: { id: 'm' + Date.now(), senderId: 'current', text, timestamp: formatTime(new Date().toISOString()), readBy: ['current'] },
       success: true,
     };
   },

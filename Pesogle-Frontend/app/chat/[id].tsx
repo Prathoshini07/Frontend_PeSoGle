@@ -1,79 +1,170 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { 
+  View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, 
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert 
+} from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Send, Lock, MoreVertical } from 'lucide-react-native';
+import { Send, Lock, Info, MoreVertical } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, spacing, shadow } from '@/constants/theme';
-import { mockMessages, type ChatMessage } from '@/services/chatService';
+import { chatService, formatTime, type ChatMessage } from '@/services/chatService';
+import { useChatWebSocket } from '@/hooks/useChatWebSocket';
+import { profileService } from '@/services/profileService';
 import { connectService } from '@/services/connectService';
-
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  // Merged params from both branches
+  const { id: chatId, name, type, ownerId, participants, admins } = useLocalSearchParams<{ 
+    id: string; 
+    name: string; 
+    type?: string; 
+    ownerId?: string; 
+    participants?: string;
+    admins?: string;
+  }>();
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
+  const [userId, setUserId] = useState<string>();
   const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
+  const { messages: wsMessages, sendMessage: sendWsMessage, isConnected } = useChatWebSocket(userId);
+
+  // Initial Data Fetch
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const [profile, history] = await Promise.all([
+          profileService.getProfile(),
+          chatService.getMessages(chatId)
+        ]);
+        setUserId(profile.user_id);
+        if (history.success) {
+          setMessages(history.data);
+        }
+      } catch (error) {
+        console.error('[ChatScreen] Initialization failed:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, [chatId]);
+
+  // WebSocket Sync
+  useEffect(() => {
+    const newWsMsgs = wsMessages
+      .filter(ws => ws.chat_id === chatId)
+      .map(ws => ({
+        id: ws._id,
+        senderId: ws.sender_id,
+        senderName: ws.sender_name,
+        text: ws.text,
+        timestamp: formatTime(ws.timestamp),
+        readBy: ws.read ? [ws.sender_id] : []
+      }));
+
+    if (newWsMsgs.length > 0) {
+      setMessages(prev => {
+        // 1. Filter out existing server messages (by ID)
+        const serverIds = new Set(prev.filter(m => !m.id.startsWith('local-')).map(m => m.id));
+        const filteredNew = newWsMsgs.filter(m => !serverIds.has(m.id));
+        
+        if (filteredNew.length === 0) return prev;
+
+        // 2. Clear out redundant "local-" messages that match new incoming ones
+        // A match is: same senderId and same text content
+        let nextMessages = [...prev];
+        filteredNew.forEach(serverMsg => {
+          const localIndex = nextMessages.findIndex(m => 
+            m.id.startsWith('local-') && 
+            m.senderId === serverMsg.senderId && 
+            m.text === serverMsg.text
+          );
+          if (localIndex !== -1) {
+            nextMessages.splice(localIndex, 1);
+          }
+        });
+
+        return [...nextMessages, ...filteredNew];
+      });
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [wsMessages, chatId]);
 
   const handleSend = useCallback(() => {
-    if (!inputText.trim()) return;
-    const newMsg: ChatMessage = {
-      id: 'm' + Date.now(),
-      senderId: 'current',
-      text: inputText.trim(),
-      timestamp: 'Just now',
-      read: false,
-    };
-    setMessages(prev => [...prev, newMsg]);
+    const text = inputText.trim();
+    if (!text) return;
+
+    // Optimistic UI: show immediately.
+    const localSenderId = userId ?? 'me';
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `local-${Date.now()}`,
+        senderId: localSenderId,
+        senderName: 'You',
+        text,
+        timestamp: formatTime(new Date().toISOString()),
+        readBy: [localSenderId],
+      },
+    ]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+
+    if (isConnected) {
+      sendWsMessage(chatId, text);
+    } else {
+      console.warn('[ChatScreen] WebSocket not connected; message not sent to server.');
+      const msg = 'Not connected. Message not sent.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Connection', msg);
+    }
+
     setInputText('');
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [inputText]);
+  }, [inputText, chatId, isConnected, sendWsMessage, userId]);
+
+  const handleBlock = useCallback(() => {
+    const blockUser = async () => {
+      try {
+        const res = await connectService.blockUser(chatId);
+        if (res.success) {
+          const msg = 'User has been blocked.';
+          if (Platform.OS === 'web') window.alert(msg);
+          else Alert.alert('Success', msg);
+          router.back();
+        }
+      } catch (error) {
+        const msg = 'Failed to block user.';
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Error', msg);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Are you sure you want to block ${name}?`)) blockUser();
+    } else {
+      Alert.alert('Block User', `Are you sure you want to block ${name}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block', style: 'destructive', onPress: blockUser },
+      ]);
+    }
+  }, [chatId, name, router]);
 
   const renderMessage = useCallback(({ item }: { item: ChatMessage }) => {
-    const isMe = item.senderId === 'current';
+    const isMe = item.senderId === userId;
     return (
       <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
+        {!isMe && item.senderName && <Text style={styles.senderName}>{item.senderName}</Text>}
         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
           <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
           <Text style={[styles.timestamp, isMe && styles.timestampMe]}>{item.timestamp}</Text>
         </View>
       </View>
     );
-  }, []);
-
-  const handleBlock = useCallback(() => {
-    const blockUser = async () => {
-      try {
-        const res = await connectService.blockUser(id);
-        if (res.success) {
-          if (Platform.OS === 'web') alert('User has been blocked.');
-          else Alert.alert('Success', 'User has been blocked.');
-          router.back();
-        }
-      } catch (error) {
-        if (Platform.OS === 'web') alert('Failed to block user.');
-        else Alert.alert('Error', 'Failed to block user.');
-      }
-    };
-
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Are you sure you want to block ${name}?`)) {
-        blockUser();
-      }
-    } else {
-      Alert.alert(
-        'Block User',
-        `Are you sure you want to block ${name}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Block', style: 'destructive', onPress: blockUser },
-        ]
-      );
-    }
-  }, [id, name, router]);
-
+  }, [userId]);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -84,64 +175,78 @@ export default function ChatScreen() {
           headerTintColor: Colors.white,
           headerRight: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginRight: spacing.sm }}>
-                <MoreVertical size={24} color={Colors.white} />
-              </TouchableOpacity>
-              
-              {showMenu && (
-                <View style={styles.menuContainer}>
-                  <TouchableOpacity 
-                    style={styles.menuItem} 
-                    onPress={() => {
-                      setShowMenu(false);
-                      handleBlock();
-                    }}
-                  >
-                    <Text style={styles.menuItemText}>Block User</Text>
+              {type === 'group' ? (
+                // Group Info Icon
+                <TouchableOpacity 
+                  onPress={() => router.push({ 
+                    pathname: '/chat/group-info' as any, 
+                    params: { id: chatId, name, ownerId, participants, admins } 
+                  })}
+                  style={{ marginRight: spacing.sm }}
+                >
+                  <Info size={22} color={Colors.white} />
+                </TouchableOpacity>
+              ) : (
+                // Direct Message Block Menu
+                <View>
+                  <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginRight: spacing.sm }}>
+                    <MoreVertical size={24} color={Colors.white} />
                   </TouchableOpacity>
+                  {showMenu && (
+                    <View style={styles.menuContainer}>
+                      <TouchableOpacity 
+                        style={styles.menuItem} 
+                        onPress={() => { setShowMenu(false); handleBlock(); }}
+                      >
+                        <Text style={styles.menuItemText}>Block User</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
           ),
         }}
       />
-      {showMenu && (
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={StyleSheet.absoluteFill} 
-          onPress={() => setShowMenu(false)}
-        />
-      )}
-
+      
+      {showMenu && <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={() => setShowMenu(false)} />}
 
       <View style={styles.encryptedBanner}>
         <Lock size={12} color={Colors.textMuted} />
-        <Text style={styles.encryptedText}>Messages are end-to-end encrypted</Text>
+        <Text style={styles.encryptedText}>
+          {isConnected ? 'Messages are end-to-end encrypted' : 'Connecting...'}
+        </Text>
       </View>
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messageList}
-        showsVerticalScrollIndicator={false}
-      />
+
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.messageList}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        />
+      )}
+
       <View style={styles.inputArea}>
         <TextInput
           style={styles.input}
           placeholder="Type a message..."
-          placeholderTextColor={Colors.textMuted}
           value={inputText}
           onChangeText={setInputText}
           multiline
-          maxLength={1000}
         />
         <TouchableOpacity
-          style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, (!inputText.trim() || !isConnected) && styles.sendBtnDisabled]}
           onPress={handleSend}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || !isConnected}
         >
-          <Send size={20} color={inputText.trim() ? Colors.white : Colors.textMuted} />
+          <Send size={20} color={inputText.trim() && isConnected ? Colors.white : Colors.textMuted} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -175,6 +280,12 @@ const styles = StyleSheet.create({
   },
   msgRowMe: {
     alignItems: 'flex-end',
+  },
+  senderName: {
+    fontSize: fontSize.xs,
+    color: Colors.textMuted,
+    marginBottom: 2,
+    marginLeft: spacing.xs,
   },
   bubble: {
     maxWidth: '80%',
@@ -274,4 +385,3 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
   },
 });
-

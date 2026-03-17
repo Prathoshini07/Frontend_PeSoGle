@@ -49,14 +49,15 @@ export default function MatchesScreen() {
       try {
         const [outgoingRes, connectionsRes] = await Promise.all([
           connectService.getOutgoingRequests(),
-          connectService.getConnectionIds()
+          connectService.getConnectionIds(),
         ]);
-        
+
         if (outgoingRes.success) {
-          setSentRequests(new Set(outgoingRes.data.map(r => r.receiver_id)));
+          setSentRequests(new Set(outgoingRes.data.map((r) => r.receiver_id)));
         }
         if (connectionsRes.success) {
-          setConnectedIds(new Set(connectionsRes.data.connection_ids));
+          // getConnectionIds() returns string[]
+          setConnectedIds(new Set(connectionsRes.data));
         }
       } catch (err) {
         console.error('[MatchesScreen] Failed to fetch connection status:', err);
