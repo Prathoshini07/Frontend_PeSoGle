@@ -3,8 +3,11 @@ import { View, StyleSheet, TouchableOpacity, SafeAreaView, Platform } from 'reac
 import { Bell, Search } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { shadow, spacing } from '@/constants/theme';
+import { useRouter } from 'expo-router';
 
 export default function AppHeader() {
+    const router = useRouter();
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.container}>
@@ -26,7 +29,10 @@ export default function AppHeader() {
                     <TouchableOpacity style={styles.iconBtn}>
                         <Search size={22} color={Colors.primaryDark} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.iconBtn}>
+                    <TouchableOpacity 
+                        style={styles.iconBtn}
+                        onPress={() => router.push('/connections' as any)}
+                    >
                         <Bell size={22} color={Colors.primaryDark} />
                         <View style={styles.notifDot} />
                     </TouchableOpacity>

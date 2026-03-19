@@ -72,7 +72,7 @@ export const chatService = {
           participantAvatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(t.name || (type === 'individual' ? 'U' : 'G')),
           lastMessage: t.last_message || 'No messages yet',
           lastMessageTime: formatTime(t.last_message_time),
-          unreadCount: 0,
+          unreadCount: t.unread_count || 0,
           ownerId: t.owner_id,
           participants: t.participants,
           admins: t.admins,
@@ -105,7 +105,7 @@ export const chatService = {
         participantAvatar: 'https://ui-avatars.com/api/?name=' + (t.name || (t.type === 'individual' ? 'U' : 'G')),
         lastMessage: t.last_message || 'No messages yet',
         lastMessageTime: formatTime(t.last_message_time),
-        unreadCount: 0,
+        unreadCount: t.unread_count || 0,
         ownerId: t.owner_id,
         participants: t.participants,
         admins: t.admins,
@@ -272,5 +272,18 @@ export const chatService = {
       data: { id: 'm' + Date.now(), senderId: 'current', text, timestamp: formatTime(new Date().toISOString()), readBy: ['current'] },
       success: true,
     };
+  },
+
+  readThread: async (chatId: string): Promise<ApiResponse<boolean>> => {
+    try {
+      await apiClient.post(`/chat/api/v1/threads/${chatId}/read`);
+      return { data: true, success: true };
+    } catch (error: any) {
+      return {
+        data: false,
+        success: false,
+        message: error.response?.data?.detail || 'Failed to mark thread as read'
+      };
+    }
   },
 };

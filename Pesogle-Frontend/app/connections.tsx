@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TouchableOpacity, 
   ActivityIndicator, TextInput, Alert 
@@ -12,7 +12,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
-import { chatService, type ChatThread } from '@/services/chatService';
+import { chatService, formatTime, type ChatThread } from '@/services/chatService';
+import { useChatWebSocket } from '@/hooks/useChatWebSocket';
 import { connectService, type ConnectRequest } from '@/services/connectService';
 import { profileService, type ProfileResponse } from '@/services/profileService';
 import type { User } from '@/mocks/users';
@@ -27,6 +28,51 @@ export default function ConnectionsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ProfileResponse[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [userId, setUserId] = useState<string>();
+  const processedMsgs = useRef(new Set<string>());
+
+  const { messages: wsMessages, isConnected } = useChatWebSocket(userId);
+
+  useEffect(() => {
+    profileService.getProfile().then(p => setUserId(p.user_id)).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (wsMessages.length > 0) {
+      queryClient.setQueryData(['chat-threads'], (old: ChatThread[] | undefined) => {
+        if (!old) return old;
+        let next = [...old];
+        let updated = false;
+
+        for (const msg of wsMessages) {
+          if (!processedMsgs.current.has(msg._id)) {
+            processedMsgs.current.add(msg._id);
+            updated = true;
+            next = next.map(t => {
+              if (t.id === msg.chat_id) {
+                if (msg.sender_id !== userId) {
+                  return { 
+                    ...t, 
+                    unreadCount: t.unreadCount + 1, 
+                    lastMessage: msg.text, 
+                    lastMessageTime: formatTime(msg.timestamp) 
+                  };
+                } else {
+                  return { 
+                    ...t, 
+                    lastMessage: msg.text, 
+                    lastMessageTime: formatTime(msg.timestamp) 
+                  };
+                }
+              }
+              return t;
+            });
+          }
+        }
+        return updated ? next : old;
+      });
+    }
+  }, [wsMessages, queryClient, userId]);
 
   // --- Queries ---
 
@@ -132,6 +178,13 @@ export default function ConnectionsScreen() {
   };
 
   const handleGoToChat = (thread: ChatThread) => {
+    if (thread.unreadCount > 0) {
+      chatService.readThread(thread.id).catch(console.error);
+      queryClient.setQueryData(['chat-threads'], (old: ChatThread[] | undefined) => 
+        old ? old.map(t => t.id === thread.id ? { ...t, unreadCount: 0 } : t) : old
+      );
+    }
+
     router.push({ 
       pathname: '/chat/[id]' as any, 
       params: { 
@@ -157,13 +210,19 @@ export default function ConnectionsScreen() {
       <View style={styles.threadContent}>
         <View style={styles.threadHeader}>
           <Text style={styles.threadName}>{item.participantName}</Text>
-          <Text style={styles.threadTime}>{item.lastMessageTime}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.threadTime}>{item.lastMessageTime}</Text>
+            {item.unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
+              </View>
+            )}
+          </View>
         </View>
         <Text style={styles.threadMessage} numberOfLines={1}>
           {item.lastMessage}
         </Text>
       </View>
-      <MessageCircle size={20} color={Colors.primaryDark} style={{ opacity: 0.6 }} />
     </TouchableOpacity>
   ), [router, handleGoToChat]);
 

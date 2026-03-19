@@ -43,3 +43,6 @@ yarn-error.*
 core
 node_modules
 .expo
+
+yarn.lock
+package-lock.json   

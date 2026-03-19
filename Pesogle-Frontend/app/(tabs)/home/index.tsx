@@ -54,7 +54,10 @@ export default function HomeScreen() {
           headerTitle: '',
           headerRight: () => (
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.notifBtn}>
+              <TouchableOpacity 
+                style={styles.notifBtn}
+                onPress={() => router.push('/connections' as any)}
+              >
                 <Bell size={22} color={Colors.primaryDark} />
                 <View style={styles.notifDot} />
               </TouchableOpacity>
