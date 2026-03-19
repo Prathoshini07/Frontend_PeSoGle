@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TouchableOpacity, 
-  ActivityIndicator, TextInput, Alert 
+  ActivityIndicator, TextInput, Alert, Pressable 
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -25,6 +25,7 @@ export default function ConnectionsScreen() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<ConnectionTab>('chats');
   const [pendingSubTab, setPendingSubTab] = useState<'received' | 'sent'>('received');
+  const [hoveredUnblockId, setHoveredUnblockId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ProfileResponse[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -138,7 +139,6 @@ export default function ConnectionsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['blocked-users'] });
       queryClient.invalidateQueries({ queryKey: ['connections'] });
-      setTab('chats');
     },
   });
 
@@ -379,9 +379,20 @@ export default function ConnectionsScreen() {
             <View style={styles.threadItem}>
               <Image source={{ uri: item.avatar }} style={styles.threadAvatar} />
               <View style={styles.threadContent}><Text style={styles.threadName}>{item.name}</Text></View>
-              <TouchableOpacity style={styles.unblockBtn} onPress={() => unblockMutation.mutate(item.id)}>
-                <Text style={styles.unblockBtnText}>Unblock</Text>
-              </TouchableOpacity>
+              <Pressable 
+                style={[
+                  styles.unblockBtn,
+                  { 
+                    backgroundColor: hoveredUnblockId === item.id ? (Colors.success || '#22c55e') : (Colors.error || '#ef4444'),
+                    borderColor: hoveredUnblockId === item.id ? (Colors.success || '#22c55e') : (Colors.error || '#ef4444')
+                  }
+                ]} 
+                onPress={() => unblockMutation.mutate(item.id)}
+                onHoverIn={() => setHoveredUnblockId(item.id)}
+                onHoverOut={() => setHoveredUnblockId(null)}
+              >
+                <Text style={[styles.unblockBtnText, { color: '#ffffff' }]}>Unblock</Text>
+              </Pressable>
             </View>
           )}
           keyExtractor={(item) => item.id}
