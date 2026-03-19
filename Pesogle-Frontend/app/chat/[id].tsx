@@ -31,7 +31,7 @@ export default function ChatScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  const { messages: wsMessages, sendMessage: sendWsMessage, isConnected } = useChatWebSocket(userId);
+  const { messages: wsMessages, sendMessage: sendWsMessage, isConnected, lastWsError } = useChatWebSocket(userId);
 
   // Initial Data Fetch
   useEffect(() => {
@@ -95,6 +95,27 @@ export default function ChatScreen() {
     }
   }, [wsMessages, chatId]);
 
+  // WebSocket Error Handling
+  useEffect(() => {
+    if (lastWsError && lastWsError.error === 'Blocked') {
+      const msg = "Cannot text a blocked user. Unblock them to continue.";
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Blocked', msg);
+      
+      // Rollback the optimistic message
+      setMessages(prev => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].id.startsWith('local-')) {
+            next.splice(i, 1);
+            break;
+          }
+        }
+        return next;
+      });
+    }
+  }, [lastWsError]);
+
   const handleSend = useCallback(() => {
     const text = inputText.trim();
     if (!text) return;
@@ -129,7 +150,16 @@ export default function ChatScreen() {
   const handleBlock = useCallback(() => {
     const blockUser = async () => {
       try {
-        const res = await connectService.blockUser(chatId);
+        let otherUserId = chatId;
+        if (participants && userId) {
+          try {
+            const parsed = JSON.parse(participants);
+            const found = parsed.find((id: string) => id !== userId);
+            if (found) otherUserId = found;
+          } catch (e) {}
+        }
+
+        const res = await connectService.blockUser(otherUserId);
         if (res.success) {
           const msg = 'User has been blocked.';
           if (Platform.OS === 'web') window.alert(msg);

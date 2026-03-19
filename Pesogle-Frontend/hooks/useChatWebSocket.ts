@@ -16,6 +16,7 @@ export function useChatWebSocket(userId: string | undefined) {
   const { token } = useAuth();
   const [messages, setMessages] = useState<WebSocketMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [lastWsError, setLastWsError] = useState<{ error: string; detail: string; timestamp: number } | null>(null);
   const ws = useRef<WebSocket | null>(null);
 
   const getWsBaseUrl = useCallback(() => {
@@ -57,6 +58,11 @@ export function useChatWebSocket(userId: string | undefined) {
     ws.current.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.error === "Blocked") {
+          console.log('[WebSocket] Received blocked error:', data);
+          setLastWsError({ error: data.error, detail: data.detail, timestamp: Date.now() });
+          return;
+        }
         console.log('[WebSocket] Received message:', data);
         setMessages((prev) => [...prev, data]);
       } catch (e) {
@@ -94,5 +100,5 @@ export function useChatWebSocket(userId: string | undefined) {
     }
   }, [isConnected]);
 
-  return { messages, isConnected, sendMessage };
+  return { messages, isConnected, sendMessage, lastWsError };
 }
