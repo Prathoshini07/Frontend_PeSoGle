@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router';
 import { Settings, Edit3, MessageCircle, Award, BookOpen, Target, Briefcase, LogOut } from 'lucide-react-native';
@@ -85,7 +85,15 @@ export default function ProfileScreen() {
       />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileCard}>
-          <View style={styles.avatar} />
+          {profile.personal_info.avatar ? (
+            <Image source={{ uri: profile.personal_info.avatar }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, { justifyContent: 'center', alignItems: 'center' }]}>
+               <Text style={{ fontSize: 32, fontWeight: 'bold', color: Colors.textMuted }}>
+                 {profile.personal_info.full_name.charAt(0).toUpperCase()}
+               </Text>
+            </View>
+          )}
           <Text style={styles.name}>{profile.personal_info.full_name}</Text>
           <Text style={styles.deptYear}>
             {(profile.personal_info.branch_or_domain[0] || 'Unknown Branch')} · Batch {profile.personal_info.academic_batch}

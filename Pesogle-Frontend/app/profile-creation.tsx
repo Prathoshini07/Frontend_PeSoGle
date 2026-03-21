@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 // @ts-expect-error - expo-router exports useRouter at runtime; types may be out of sync
 import { useRouter, Stack } from 'expo-router';
 import { User, Layers, Target } from 'lucide-react-native';
@@ -53,9 +54,37 @@ export default function ProfileCreationScreen() {
   const [goalInput, setGoalInput] = useState('');
   const [goals, setGoals] = useState<string[]>([]);
   const [bio, setBio] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
+  const pickImage = async () => {
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploadingAvatar(true);
+        const name = asset.fileName || 'profile.jpg';
+        const type = asset.mimeType || 'image/jpeg';
+        const response = await profileService.uploadAvatar(asset.uri, type, name);
+        setAvatar(response.avatar_url);
+        Alert.alert('Success', 'Profile photo updated!');
+      }
+    } catch (error) {
+      console.error('Avatar upload failed', error);
+      Alert.alert('Upload Failed', 'Failed to upload profile photo.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const toggleDomain = useCallback((domain: string) => {
     setSelectedDomains(prev =>
@@ -128,6 +157,7 @@ export default function ProfileCreationScreen() {
         setExperiences(existing.experience);
         setGoals(existing.goals || []);
         setBio(existing.bio || '');
+        setAvatar(existing.personal_info.avatar || null);
       } catch (e) {
         console.log('[ProfileCreation] No existing profile or failed to load, creating new.', e);
       } finally {
@@ -167,6 +197,7 @@ export default function ProfileCreationScreen() {
         degree: degree as Degree,
         branch_or_domain: department ? [department] : [],
         academic_batch: parsedBatch,
+        ...(avatar ? { avatar } : {}),
       },
       skills_and_interests: {
         skills: selectedSkills,
@@ -258,6 +289,38 @@ export default function ProfileCreationScreen() {
             <View style={styles.stepCard}>
               <Text style={styles.stepTitle}>Tell us about yourself</Text>
               <Text style={styles.stepSubtitle}>This helps us personalize your experience</Text>
+
+              <View style={{ alignItems: 'center', marginBottom: spacing.lg }}>
+                <TouchableOpacity onPress={pickImage} disabled={isUploadingAvatar}>
+                  {avatar ? (
+                    <Image source={{ uri: avatar }} style={{ width: 100, height: 100, borderRadius: 50 }} />
+                  ) : (
+                    <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.border, justifyContent: 'center', alignItems: 'center' }}>
+                      <User size={40} color={Colors.textMuted} />
+                    </View>
+                  )}
+                  {isUploadingAvatar && (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center', borderRadius: 50 }}>
+                      <ActivityIndicator color={Colors.primaryDark} />
+                    </View>
+                  )}
+                  <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: Colors.primaryDark, borderRadius: 15, width: 30, height: 30, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.card }}>
+                    <Text style={{ color: Colors.white, fontSize: 18, lineHeight: 20 }}>+</Text>
+                  </View>
+                </TouchableOpacity>
+                {avatar && (
+                  <TouchableOpacity
+                    style={{ marginTop: spacing.sm }}
+                    onPress={() => setAvatar(null)}
+                    disabled={isUploadingAvatar}
+                  >
+                    <Text style={{ color: Colors.error, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>
+                      Remove Photo
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <InputField label="Full Name" placeholder="Enter your full name" value={name} onChangeText={setName} testID="name-input" />
               <InputField
                 label="Institution"

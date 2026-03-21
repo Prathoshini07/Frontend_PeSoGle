@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
@@ -50,11 +50,15 @@ export default function UserProfileScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarText}>
-            {pInfo.full_name.charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        {pInfo.avatar ? (
+            <Image source={{ uri: pInfo.avatar }} style={styles.avatarPlaceholder} />
+        ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>
+                {pInfo.full_name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+        )}
         <Text style={styles.name}>{pInfo.full_name}</Text>
         <Text style={styles.degree}>{pInfo.degree}</Text>
       </View>

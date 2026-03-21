@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import apiClient, { type ApiResponse } from './api';
 
 export type Degree = 'B.Tech' | 'M.Sc' | 'M.Tech' | 'PhD';
@@ -9,6 +10,7 @@ export interface PersonalInfo {
   degree: Degree;
   branch_or_domain: string[];
   academic_batch: number;
+  avatar?: string;
 }
 
 export interface SkillsAndInterests {
@@ -52,6 +54,30 @@ export const profileService = {
   updateProfile: async (data: ProfileCreateRequest): Promise<void> => {
     console.log('[ProfileService] Updating profile');
     await apiClient.put('/profile/api/v1/profile/me', data);
+  },
+
+  uploadAvatar: async (uri: string, type: string = 'image/jpeg', name: string = 'avatar.jpg'): Promise<{ message: string; avatar_url: string }> => {
+    console.log('[ProfileService] Uploading avatar');
+    const formData = new FormData();
+    if (Platform.OS === 'web') {
+      const fetchResponse = await fetch(uri);
+      const blob = await fetchResponse.blob();
+      formData.append('file', blob, name);
+    } else {
+      // React Native FormData requires 'uri', 'name', 'type' for file uploads
+      formData.append('file', {
+        uri,
+        type,
+        name,
+      } as any);
+    }
+
+    const response = await apiClient.post('/profile/api/v1/profile/me/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   },
 
   getProfile: async (): Promise<ProfileResponse> => {
