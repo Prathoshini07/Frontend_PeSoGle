@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import apiClient, { type ApiResponse } from './api';
 
 export type Degree = 'B.Tech' | 'M.Sc' | 'M.Tech' | 'PhD';
@@ -9,6 +10,7 @@ export interface PersonalInfo {
   degree: Degree;
   branch_or_domain: string[];
   academic_batch: number;
+  avatar?: string;
 }
 
 export interface SkillsAndInterests {
@@ -34,6 +36,8 @@ export interface ProfileCreateRequest {
   skills_and_interests: SkillsAndInterests;
   projects: Project[];
   experience: Experience[];
+  goals?: string[];
+  bio?: string | null;
 }
 
 export interface ProfileResponse extends ProfileCreateRequest {
@@ -42,6 +46,40 @@ export interface ProfileResponse extends ProfileCreateRequest {
 }
 
 export const profileService = {
+  createProfile: async (data: ProfileCreateRequest): Promise<void> => {
+    console.log('[ProfileService] Creating profile');
+    await apiClient.post('/profile/api/v1/profile/', data);
+  },
+
+  updateProfile: async (data: ProfileCreateRequest): Promise<void> => {
+    console.log('[ProfileService] Updating profile');
+    await apiClient.put('/profile/api/v1/profile/me', data);
+  },
+
+  uploadAvatar: async (uri: string, type: string = 'image/jpeg', name: string = 'avatar.jpg'): Promise<{ message: string; avatar_url: string }> => {
+    console.log('[ProfileService] Uploading avatar');
+    const formData = new FormData();
+    if (Platform.OS === 'web') {
+      const fetchResponse = await fetch(uri);
+      const blob = await fetchResponse.blob();
+      formData.append('file', blob, name);
+    } else {
+      // React Native FormData requires 'uri', 'name', 'type' for file uploads
+      formData.append('file', {
+        uri,
+        type,
+        name,
+      } as any);
+    }
+
+    const response = await apiClient.post('/profile/api/v1/profile/me/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
   getProfile: async (): Promise<ProfileResponse> => {
     console.log('[ProfileService] Fetching profile');
     const response = await apiClient.get<ProfileResponse>('/profile/api/v1/profile/me');
@@ -54,13 +92,6 @@ export const profileService = {
     return response.data;
   },
 
-  searchProfiles: async (query: string): Promise<{ user_id: string; full_name: string; email: string }[]> => {
-    console.log('[ProfileService] Searching profiles for:', query);
-    const response = await apiClient.get('/profile/api/v1/profile/search', {
-      params: { query }
-    });
-    return response.data;
-  },
 
   searchProfiles: async (query: string): Promise<ProfileResponse[]> => {
     console.log('[ProfileService] Searching profiles:', query);
