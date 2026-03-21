@@ -37,8 +37,15 @@ export default function ProjectCard({ project, onPress, testID }: ProjectCardPro
   const progressPercent = project.progress || 0;
   const tags = [...(project.domain || []), ...(project.tech_stack || [])].slice(0, 3);
 
+  const CardContainer = onPress ? TouchableOpacity : View;
+
   return (
-    <TouchableOpacity testID={testID} style={styles.card} onPress={onPress} activeOpacity={0.7}>
+    <CardContainer 
+      testID={testID} 
+      style={styles.card} 
+      onPress={onPress} 
+      activeOpacity={onPress ? 0.7 : 1}
+    >
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Text style={styles.title} numberOfLines={1}>{project.title}</Text>
@@ -47,7 +54,9 @@ export default function ProjectCard({ project, onPress, testID }: ProjectCardPro
             <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
           </View>
         </View>
-        <Text style={styles.description} numberOfLines={2}>{project.description}</Text>
+        <Text style={styles.description} numberOfLines={2}>
+          {project.abstract || project.description}
+        </Text>
       </View>
       <View style={styles.tagsRow}>
         {tags.map((tag) => (
@@ -75,7 +84,7 @@ export default function ProjectCard({ project, onPress, testID }: ProjectCardPro
         </View>
         <Text style={styles.date}>{new Date(project.created_at).toLocaleDateString()}</Text>
       </View>
-    </TouchableOpacity>
+    </CardContainer>
   );
 }
 

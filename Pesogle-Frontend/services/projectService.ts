@@ -3,7 +3,7 @@ import apiClient from './api';
 export interface Project {
   _id: string;
   title: string;
-  description: string;
+  description?: string;
   abstract: string;
   status: 'DRAFT' | 'ABSTRACT_SUBMITTED' | 'ABSTRACT_APPROVED' | 'IMPLEMENTATION' | 'MID_REVIEW' | 'FINAL_REPORT_SUBMITTED' | 'COMPLETED' | 'ARCHIVED';
   domain: string[];

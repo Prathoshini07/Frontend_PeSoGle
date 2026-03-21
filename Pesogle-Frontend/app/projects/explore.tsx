@@ -24,8 +24,8 @@ export default function ExploreProjectsScreen() {
   };
 
   const renderProject = useCallback(({ item }: { item: Project }) => (
-    <ProjectCard project={item} onPress={() => router.push(`/project/${item._id}` as any)} />
-  ), [router]);
+    <ProjectCard project={item} />
+  ), []);
 
   return (
     <View style={styles.container}>
