@@ -15,6 +15,7 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
   const handleLogout = useCallback(() => {
     logout();
@@ -104,9 +105,9 @@ export default function ProfileScreen() {
 
         <View style={styles.bioCard}>
           <Text style={styles.bioText}>
-            {profile.skills_and_interests.skills.length > 0 || profile.skills_and_interests.interests.length > 0
+            {profile.bio || (profile.skills_and_interests.skills.length > 0 || profile.skills_and_interests.interests.length > 0
               ? `Skills: ${profile.skills_and_interests.skills.join(', ')}`
-              : 'No additional bio information yet.'}
+              : 'No additional bio information yet.')}
           </Text>
         </View>
 
@@ -136,7 +137,7 @@ export default function ProfileScreen() {
 
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
-            <Target size={18} color={Colors.primaryDark} />
+            <Briefcase size={18} color={Colors.primaryDark} />
             <Text style={styles.sectionTitle}>Experience</Text>
           </View>
           {profile.experience.map(exp => (
@@ -149,15 +150,51 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {profile.goals && profile.goals.length > 0 && (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Target size={18} color={Colors.primaryDark} />
+              <Text style={styles.sectionTitle}>Goals</Text>
+            </View>
+            {profile.goals.map(goal => (
+              <View key={goal} style={styles.goalItem}>
+                <View style={styles.goalDot} />
+                <Text style={styles.goalText}>{goal}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Briefcase size={18} color={Colors.primaryDark} />
             <Text style={styles.sectionTitle}>Projects</Text>
           </View>
           {profile.projects.map(project => (
-            <View key={project.title} style={styles.projectItem}>
+            <TouchableOpacity 
+              key={project.title} 
+              style={styles.projectItem}
+              onPress={() => setExpandedProject(prev => prev === project.title ? null : project.title)}
+            >
               <Text style={styles.projectText}>{project.title}</Text>
-            </View>
+              {expandedProject === project.title && (
+                <View style={{ marginTop: spacing.sm }}>
+                  <Text style={{ fontSize: fontSize.sm, color: Colors.textSecondary, marginBottom: spacing.xs }}>
+                    <Text style={{ fontWeight: 'bold' }}>Role:</Text> {project.role}
+                  </Text>
+                  {project.description && (
+                    <Text style={{ fontSize: fontSize.sm, color: Colors.textSecondary, marginBottom: spacing.xs }}>
+                      {project.description}
+                    </Text>
+                  )}
+                  {project.tech_stack && project.tech_stack.length > 0 && (
+                    <Text style={{ fontSize: fontSize.xs, color: Colors.textMuted }}>
+                      <Text style={{ fontWeight: 'bold' }}>Tech:</Text> {project.tech_stack.join(', ')}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
           ))}
         </View>
 

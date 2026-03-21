@@ -34,6 +34,8 @@ export interface ProfileCreateRequest {
   skills_and_interests: SkillsAndInterests;
   projects: Project[];
   experience: Experience[];
+  goals?: string[];
+  bio?: string | null;
 }
 
 export interface ProfileResponse extends ProfileCreateRequest {
@@ -42,6 +44,16 @@ export interface ProfileResponse extends ProfileCreateRequest {
 }
 
 export const profileService = {
+  createProfile: async (data: ProfileCreateRequest): Promise<void> => {
+    console.log('[ProfileService] Creating profile');
+    await apiClient.post('/profile/api/v1/profile/', data);
+  },
+
+  updateProfile: async (data: ProfileCreateRequest): Promise<void> => {
+    console.log('[ProfileService] Updating profile');
+    await apiClient.put('/profile/api/v1/profile/me', data);
+  },
+
   getProfile: async (): Promise<ProfileResponse> => {
     console.log('[ProfileService] Fetching profile');
     const response = await apiClient.get<ProfileResponse>('/profile/api/v1/profile/me');
@@ -54,13 +66,6 @@ export const profileService = {
     return response.data;
   },
 
-  searchProfiles: async (query: string): Promise<{ user_id: string; full_name: string; email: string }[]> => {
-    console.log('[ProfileService] Searching profiles for:', query);
-    const response = await apiClient.get('/profile/api/v1/profile/search', {
-      params: { query }
-    });
-    return response.data;
-  },
 
   searchProfiles: async (query: string): Promise<ProfileResponse[]> => {
     console.log('[ProfileService] Searching profiles:', query);

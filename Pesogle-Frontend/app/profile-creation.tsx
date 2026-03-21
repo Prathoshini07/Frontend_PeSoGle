@@ -126,6 +126,8 @@ export default function ProfileCreationScreen() {
         setSelectedDomains(existing.skills_and_interests.interests);
         setProjects(existing.projects);
         setExperiences(existing.experience);
+        setGoals(existing.goals || []);
+        setBio(existing.bio || '');
       } catch (e) {
         console.log('[ProfileCreation] No existing profile or failed to load, creating new.', e);
       } finally {
@@ -172,6 +174,8 @@ export default function ProfileCreationScreen() {
       },
       projects,
       experience: experiences,
+      goals,
+      bio: bio.trim() || null,
     };
 
     try {
@@ -182,7 +186,7 @@ export default function ProfileCreationScreen() {
         try {
           await profileService.updateProfile(payload);
           completeProfile();
-          router.replace('/(tabs)/home' as any);
+          router.replace('/(tabs)/profile' as any);
         } catch (error: any) {
           console.error('[ProfileCreation] Update failed', error);
           const detail = error?.response?.data?.detail;
@@ -199,7 +203,7 @@ export default function ProfileCreationScreen() {
       try {
         await profileService.createProfile(payload);
         completeProfile();
-        router.replace('/(tabs)/home' as any);
+        router.replace('/(tabs)/profile' as any);
       } catch (error: any) {
         if (error?.response?.status === 409) {
           console.log('[ProfileCreation] Conflict 409 - profile already exists. Updating instead.');
@@ -338,15 +342,30 @@ export default function ProfileCreationScreen() {
                 onSubmitEditing={addProject}
                 returnKeyType="done"
               />
+              <SecondaryButton title="Add Project" onPress={addProject} style={{ marginBottom: spacing.md }} />
               {projects.length > 0 && (
-                <View style={styles.chipsWrap}>
+                <View style={{ marginTop: spacing.md }}>
                   {projects.map(p => (
-                    <TagChip
-                      key={p.title}
-                      label={p.title}
-                      selected
-                      onPress={() => setProjects(prev => prev.filter(x => x.title !== p.title))}
-                    />
+                    <View key={p.title} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: spacing.md, backgroundColor: Colors.card, borderRadius: borderRadius.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: Colors.border }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: 'bold', color: Colors.primaryDark }}>{p.title}</Text>
+                        <Text style={{ fontSize: 12, color: Colors.textSecondary }}>{p.role}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                        <TouchableOpacity onPress={() => {
+                            setProjectInput(p.title);
+                            setProjectRole(p.role);
+                            setProjectDescription(p.description || '');
+                            setProjectTechStack(p.tech_stack.join(', '));
+                            setProjects(prev => prev.filter(x => x.title !== p.title));
+                        }}>
+                          <Text style={{ color: Colors.primaryDark, fontWeight: 'bold' }}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setProjects(prev => prev.filter(x => x.title !== p.title))}>
+                          <Text style={{ color: Colors.error, fontWeight: 'bold' }}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   ))}
                 </View>
               )}
@@ -371,26 +390,29 @@ export default function ProfileCreationScreen() {
                 onSubmitEditing={addExperience}
                 returnKeyType="done"
               />
+              <SecondaryButton title="Add Experience" onPress={addExperience} style={{ marginBottom: spacing.md }} />
               {experiences.length > 0 && (
-                <View style={styles.chipsWrap}>
+                <View style={{ marginTop: spacing.md }}>
                   {experiences.map(exp => (
-                    <TagChip
-                      key={`${exp.company}-${exp.role}-${exp.duration}`}
-                      label={`${exp.role} @ ${exp.company} (${exp.duration})`}
-                      selected
-                      onPress={() =>
-                        setExperiences(prev =>
-                          prev.filter(
-                            x =>
-                              !(
-                                x.company === exp.company &&
-                                x.role === exp.role &&
-                                x.duration === exp.duration
-                              ),
-                          )
-                        )
-                      }
-                    />
+                    <View key={`${exp.company}-${exp.role}-${exp.duration}`} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: spacing.md, backgroundColor: Colors.card, borderRadius: borderRadius.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: Colors.border }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: 'bold', color: Colors.primaryDark }}>{exp.role}</Text>
+                        <Text style={{ fontSize: 12, color: Colors.textSecondary }}>{exp.company} ({exp.duration})</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                        <TouchableOpacity onPress={() => {
+                            setExperienceCompany(exp.company);
+                            setExperienceRole(exp.role);
+                            setExperienceDuration(exp.duration);
+                            setExperiences(prev => prev.filter(x => !(x.company === exp.company && x.role === exp.role && x.duration === exp.duration)));
+                        }}>
+                          <Text style={{ color: Colors.primaryDark, fontWeight: 'bold' }}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setExperiences(prev => prev.filter(x => !(x.company === exp.company && x.role === exp.role && x.duration === exp.duration)))}>
+                          <Text style={{ color: Colors.error, fontWeight: 'bold' }}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   ))}
                 </View>
               )}
@@ -402,10 +424,26 @@ export default function ProfileCreationScreen() {
                 onSubmitEditing={addGoal}
                 returnKeyType="done"
               />
+              <SecondaryButton title="Add Goal" onPress={addGoal} style={{ marginBottom: spacing.md }} />
               {goals.length > 0 && (
-                <View style={styles.chipsWrap}>
+                <View style={{ marginTop: spacing.md }}>
                   {goals.map(g => (
-                    <TagChip key={g} label={g} selected onPress={() => setGoals(prev => prev.filter(x => x !== g))} />
+                    <View key={g} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: spacing.md, backgroundColor: Colors.card, borderRadius: borderRadius.sm, marginBottom: spacing.sm, borderWidth: 1, borderColor: Colors.border }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: 'bold', color: Colors.primaryDark }}>{g}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                        <TouchableOpacity onPress={() => {
+                            setGoalInput(g);
+                            setGoals(prev => prev.filter(x => x !== g));
+                        }}>
+                          <Text style={{ color: Colors.primaryDark, fontWeight: 'bold' }}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setGoals(prev => prev.filter(x => x !== g))}>
+                          <Text style={{ color: Colors.error, fontWeight: 'bold' }}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   ))}
                 </View>
               )}

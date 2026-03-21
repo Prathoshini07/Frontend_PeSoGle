@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
@@ -11,6 +11,7 @@ export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedProject, setExpandedProject] = useState<number | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -74,6 +75,25 @@ export default function UserProfileScreen() {
         </View>
       </View>
 
+      {profile.bio && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Bio</Text>
+          <Text style={styles.infoText}>{profile.bio}</Text>
+        </View>
+      )}
+
+      {profile.goals && profile.goals.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Goals</Text>
+          {profile.goals.map((goal, idx) => (
+            <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.sm }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.accent }} />
+              <Text style={styles.infoText}>{goal}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {profile.skills_and_interests && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Skills & Interests</Text>
@@ -92,16 +112,24 @@ export default function UserProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Projects</Text>
           {profile.projects.map((proj, idx) => (
-            <View key={idx} style={styles.projectCard}>
+            <TouchableOpacity 
+              key={idx} 
+              style={styles.projectCard}
+              onPress={() => setExpandedProject(prev => prev === idx ? null : idx)}
+            >
               <Text style={styles.projectTitle}>{proj.title}</Text>
-              <Text style={styles.projectRole}>{proj.role}</Text>
-              {proj.description && <Text style={styles.projectDesc}>{proj.description}</Text>}
-              <View style={styles.chipsContainer}>
-                {proj.tech_stack.map(tech => (
-                  <TagChip key={tech} label={tech} small />
-                ))}
-              </View>
-            </View>
+              {expandedProject === idx && (
+                <View style={{ marginTop: spacing.sm }}>
+                  <Text style={styles.projectRole}>{proj.role}</Text>
+                  {proj.description && <Text style={styles.projectDesc}>{proj.description}</Text>}
+                  <View style={styles.chipsContainer}>
+                    {proj.tech_stack.map(tech => (
+                      <TagChip key={tech} label={tech} small />
+                    ))}
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
           ))}
         </View>
       )}
