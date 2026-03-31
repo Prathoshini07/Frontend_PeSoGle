@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { ImagePlus, X, Send } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,6 +13,8 @@ import { categories } from '@/mocks/posts'; // Contains things like 'Academics',
 export default function ComposePostScreen() {
     const router = useRouter();
 
+    const { editId } = useLocalSearchParams<{ editId: string }>();
+
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [tagsString, setTagsString] = useState('');
@@ -22,6 +24,7 @@ export default function ComposePostScreen() {
 
     const [mediaUri, setMediaUri] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoadingEdit, setIsLoadingEdit] = useState(!!editId);
 
     const postTypes = [
         { id: 'POST', label: 'Post' },
@@ -54,6 +57,42 @@ export default function ComposePostScreen() {
         'PLACEMENTS': 'PLACEMENTS',
         'PROJECTS': 'PROJECTS'
     };
+
+    React.useEffect(() => {
+        if (editId) {
+            const loadPost = async () => {
+                try {
+                    const res = await postService.getPostById(editId);
+                    if (res.success && res.data) {
+                        const post = res.data;
+                        setTitle(post.title);
+                        setContent(post.content);
+                        setSelectedType(post.type);
+                        setTagsString((post.tags || []).join(', '));
+                        
+                        // Try to find matching category
+                        const mappedKeys = Object.keys(categoryMap).filter(k => categoryMap[k] === post.category);
+                        const exactMatch = categories.find(c => c === post.category || mappedKeys.includes(c));
+                        if (exactMatch) {
+                            setSelectedCategory(exactMatch);
+                        } else {
+                            setSelectedCategory('Other');
+                            setCustomCategory(post.category);
+                        }
+                        
+                        if (post.media && post.media.length > 0 && post.media[0].url) {
+                            setMediaUri(post.media[0].url);
+                        }
+                    }
+                } catch (err) {
+                    console.log('[Compose] Failed to fetch edit post', err);
+                } finally {
+                    setIsLoadingEdit(false);
+                }
+            };
+            loadPost();
+        }
+    }, [editId]);
 
     const pickImage = async () => {
         // Request permission
@@ -103,11 +142,16 @@ export default function ComposePostScreen() {
                 tags: tagsString.split(',').map(t => t.trim()).filter(t => t.length > 0)
             };
 
-            const response = await postService.createPost(data);
+            let response;
+            if (editId) {
+                 response = await postService.updatePost(editId, data);
+            } else {
+                 response = await postService.createPost(data);
+            }
 
             if (response.success && response.data) {
-                // If image was selected, attempt to upload
-                if (mediaUri) {
+                // If new image was selected (not starting with http from fetched), attempt to upload
+                if (mediaUri && !mediaUri.startsWith('http')) {
                     const file = {
                         uri: mediaUri,
                         name: mediaUri.split('/').pop() || 'upload.jpg',
@@ -124,10 +168,10 @@ export default function ComposePostScreen() {
                 // Go back and refresh list implicitly
                 router.back();
             } else {
-                Alert.alert('Error', 'Failed to create post. Try again.');
+                Alert.alert('Error', `Failed to ${editId ? 'update' : 'create'} post. Try again.`);
             }
         } catch (error) {
-            console.log('[Compose] Create post error:', error);
+            console.log('[Compose] Create/Update post error:', error);
             Alert.alert('Error', 'An unexpected error occurred while posting.');
         } finally {
             setIsSubmitting(false);
@@ -138,12 +182,12 @@ export default function ComposePostScreen() {
         <View style={styles.container}>
             <Stack.Screen
                 options={{
-                    title: 'New Post',
+                    title: editId ? 'Edit Post' : 'New Post',
                     headerRight: () => (
                         <TouchableOpacity
-                            style={[styles.submitBtn, (!title.trim() || !content.trim()) && styles.submitBtnDisabled]}
+                            style={[styles.submitBtn, (!title.trim() || !content.trim() || isLoadingEdit) && styles.submitBtnDisabled]}
                             onPress={handleSubmit}
-                            disabled={isSubmitting || !title.trim() || !content.trim()}
+                            disabled={isSubmitting || !title.trim() || !content.trim() || isLoadingEdit}
                         >
                             {isSubmitting ? (
                                 <ActivityIndicator size="small" color={Colors.white} />
@@ -156,9 +200,15 @@ export default function ComposePostScreen() {
             />
 
             <ScrollView contentContainerStyle={styles.formContainer}>
-                {/* Type Selector */}
-                <Text style={styles.label}>Post Type</Text>
-                <View style={styles.typeSelector}>
+                {isLoadingEdit ? (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 }}>
+                        <ActivityIndicator size="large" color={Colors.primaryDark} />
+                    </View>
+                ) : (
+                    <>
+                        {/* Type Selector */}
+                        <Text style={styles.label}>Post Type</Text>
+                        <View style={styles.typeSelector}>
                     {postTypes.map(pt => (
                         <TouchableOpacity
                             key={pt.id}
@@ -240,7 +290,8 @@ export default function ComposePostScreen() {
                         <Text style={styles.attachText}>Add Image</Text>
                     </TouchableOpacity>
                 )}
-
+                    </>
+                )}
             </ScrollView>
         </View>
     );

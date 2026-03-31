@@ -323,7 +323,7 @@ export default function ConnectionsScreen() {
       </View>
 
       <View style={styles.tabRow}>
-        {(['chats', 'pending', 'blocked', 'search'] as const).map(t => (
+        {(['chats', 'pending', 'blocked'] as const).map(t => (
           <TouchableOpacity
             key={t}
             style={[styles.tab, tab === t && styles.tabActive]}

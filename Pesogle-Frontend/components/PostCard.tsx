@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
-import { ArrowUp, MessageSquare, CheckCircle, BookOpen, FileText, HelpCircle, Trash2 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ArrowUp, MessageSquare, CheckCircle, BookOpen, FileText, HelpCircle, Trash2, PenSquare } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import { profileService } from '@/services/profileService';
@@ -22,6 +23,7 @@ export default function PostCard({ post, onPress, testID, isDetailed, currentUse
   const [authorAvatar, setAuthorAvatar] = useState(post.authorAvatar);
   const [upvoteCount, setUpvoteCount] = useState(post.upvotes);
   const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setUpvoteCount(post.upvotes);
@@ -116,13 +118,18 @@ export default function PostCard({ post, onPress, testID, isDetailed, currentUse
         )}
 
         {currentUserId === post.authorId && (
-          <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} disabled={isDeleting}>
-            {isDeleting ? (
-              <ActivityIndicator size="small" color={Colors.error} />
-            ) : (
-              <Trash2 size={16} color={Colors.error} />
-            )}
-          </TouchableOpacity>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/(tabs)/discussions/compose', params: { editId: post.id } } as any)} style={styles.actionBtn}>
+              <PenSquare size={16} color={Colors.primaryDark} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDelete} style={styles.actionBtn} disabled={isDeleting}>
+              {isDeleting ? (
+                <ActivityIndicator size="small" color={Colors.error} />
+              ) : (
+                <Trash2 size={16} color={Colors.error} />
+              )}
+            </TouchableOpacity>
+          </View>
         )}
       </View>
       <View style={styles.titleRow}>
@@ -293,8 +300,13 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
     fontWeight: fontWeight.medium,
   },
-  deleteBtn: {
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginLeft: 'auto',
+    gap: spacing.sm,
+  },
+  actionBtn: {
     padding: spacing.xs,
   },
 });

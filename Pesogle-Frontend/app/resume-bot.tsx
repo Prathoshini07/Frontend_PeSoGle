@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { Upload, FileText, AlertTriangle, CheckCircle, Lightbulb, ChevronRight } from 'lucide-react-native';
@@ -41,17 +42,36 @@ export default function ResumeBotScreen() {
         });
       }
 
-      const response = await apiClient.post(`/resume-bot/analyze`, formData, {
+      const stored = await AsyncStorage.getItem('pesogle_auth');
+      let token = 'dev_override_token';
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.token) {
+          token = parsed.token;
+        }
+      }
+
+      const response = await fetch(`${apiClient.defaults.baseURL}/resume-bot/analyze`, {
+        method: 'POST',
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
         },
+        body: formData,
       });
 
-      console.log('Analysis response:', response.data);
-      setAnalysis(response.data);
+      if (!response.ok) {
+        let errorData: any = await response.text();
+        try { errorData = JSON.parse(errorData); } catch (e) {}
+        throw new Error(errorData?.detail || errorData?.message || `HTTP error ${response.status}`);
+      }
+
+      const responseData = await response.json();
+      console.log('Analysis response:', responseData);
+      setAnalysis(responseData);
     } catch (error: any) {
-      console.error('Upload error details:', error.response?.data || error.message);
-      Alert.alert('Upload Failed', `Error: ${error.response?.data?.detail || error.message}`);
+      console.error('Upload error details:', error.message);
+      Alert.alert('Upload Failed', `Error: ${error.message}`);
     } finally {
       setLoading(false);
     }

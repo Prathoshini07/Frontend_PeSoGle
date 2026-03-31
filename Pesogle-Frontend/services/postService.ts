@@ -119,6 +119,33 @@ export const postService = {
     return { data: post, success: true };
   },
 
+  updatePost: async (postId: string, postData: Partial<CreatePostData>): Promise<ApiResponse<Post>> => {
+    console.log('[PostService] Updating post:', postId);
+    const response = await apiClient.put(`/posts/${postId}`, postData);
+    const raw = response.data;
+
+    const post: Post = {
+      id: raw.post_id || raw._id,
+      type: raw.type || 'POST',
+      authorId: raw.author_id || 'unknown',
+      authorName: raw.author_name || 'Anonymous User',
+      authorAvatar: raw.author_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(raw.author_name || 'User')}&background=random`,
+      authorDepartment: raw.author_department || 'General',
+      title: raw.title,
+      content: raw.content,
+      category: raw.category,
+      upvotes: raw.upvote_count || 0,
+      answers: raw.type === 'QUESTION' ? (raw.answer_count || 0) : (raw.comment_count || 0),
+      hasAcceptedAnswer: !!raw.accepted_answer_id,
+
+      createdAt: raw.created_at ? new Date(raw.created_at).toLocaleDateString() : 'Just now',
+      tags: raw.tags || [],
+      media: raw.media || [],
+    };
+
+    return { data: post, success: true };
+  },
+
 
   uploadMedia: async (postId: string, files: any[]): Promise<ApiResponse<any>> => {
     console.log('[PostService] Uploading media for post:', postId);
@@ -145,7 +172,7 @@ export const postService = {
       target_type: 'POST',
       target_id: postId
     });
-    return response.data;
+    return { ...response.data, success: true };
   },
 
   getComments: async (targetType: string, targetId: string): Promise<ApiResponse<Comment[]>> => {
@@ -174,28 +201,28 @@ export const postService = {
 
   acceptAnswer: async (answerId: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await apiClient.post(`/posts/questions/answers/${answerId}/accept`);
-    return response.data;
+    return { ...response.data, success: true };
   },
 
   removeVote: async (targetId: string, targetType: string = 'POST'): Promise<ApiResponse<{ message: string }>> => {
     const response = await apiClient.delete(`/posts/vote`, {
       data: { target_type: targetType, target_id: targetId }
     });
-    return response.data;
+    return { ...response.data, success: true };
   },
 
   deletePost: async (postId: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await apiClient.delete(`/posts/${postId}`);
-    return response.data;
+    return { ...response.data, success: true };
   },
 
   deleteAnswer: async (answerId: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await apiClient.delete(`/posts/questions/answers/${answerId}`);
-    return response.data;
+    return { ...response.data, success: true };
   },
 
   deleteComment: async (commentId: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await apiClient.delete(`/posts/comments/${commentId}`);
-    return response.data;
+    return { ...response.data, success: true };
   },
 };
