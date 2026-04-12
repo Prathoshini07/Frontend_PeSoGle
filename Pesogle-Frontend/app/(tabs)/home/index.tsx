@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
-import { Bell, ChevronRight, TrendingUp, Sparkles, BookOpen, LogOut } from 'lucide-react-native';
+import { Bell, ChevronRight, TrendingUp, Sparkles, BookOpen, LogOut, Search } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { borderRadius, fontSize, fontWeight, shadow, spacing } from '@/constants/theme';
 import UserCard from '@/components/UserCard';
@@ -54,6 +54,12 @@ export default function HomeScreen() {
           headerTitle: '',
           headerRight: () => (
             <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.notifBtn}
+                onPress={() => router.push('/search' as any)}
+              >
+                <Search size={22} color={Colors.primaryDark} />
+              </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.notifBtn}
                 onPress={() => router.push('/connections' as any)}
